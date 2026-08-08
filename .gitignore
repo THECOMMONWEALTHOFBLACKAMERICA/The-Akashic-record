@@ -1,0 +1,17 @@
+.env
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+node_modules/
+.next/
+dist/
+build/
+coverage/
+*.log
+.DS_Store
+.ipfs/
+data/private/
+data/index/
+artifacts/
