@@ -1,7 +1,8 @@
 import re
 import httpx
 
-from .memory import recall, remember
+from .memory import remember
+from .retrieval import hybrid_recall
 from .settings import settings
 from .sources import search_all
 
@@ -19,7 +20,7 @@ async def call_model(prompt: str) -> str:
     payload = {
         "model": settings.llm_model,
         "messages": [
-            {"role": "system", "content": "You are T.A.R. Distinguish sourced facts from inference, cite supplied evidence numbers, prefer primary sources, and say when evidence is insufficient."},
+            {"role": "system", "content": "You are T.A.R. Distinguish sourced facts from inference, cite supplied evidence numbers, prefer primary sources and ingested records, and say when evidence is insufficient. Never fabricate citations."},
             {"role": "user", "content": prompt},
         ],
         "temperature": 0.2,
@@ -31,7 +32,7 @@ async def call_model(prompt: str) -> str:
 
 
 async def answer(query: str, research: bool = True):
-    memory_hits = recall(query, limit=5)
+    memory_hits = hybrid_recall(query, limit=8)
     live_evidence = await search_all(query, limit=4) if research else []
     if live_evidence:
         remember(live_evidence)
@@ -39,21 +40,21 @@ async def answer(query: str, research: bool = True):
     evidence = []
     seen = set()
     for item in memory_hits + live_evidence:
-        key = (item.get("source"), item.get("url"), item.get("title"))
+        key = (item.get("document_id"), item.get("chunk_id"), item.get("source"), item.get("url"), item.get("title"), item.get("snippet"))
         if key not in seen:
             seen.add(key)
             evidence.append(item)
 
-    context = "\n".join(
-        f"[{i + 1}] {x['source']} | {x['title']} | {x.get('url', '')} | {clean(x.get('snippet', ''))}"
-        for i, x in enumerate(evidence[:12])
+    context = "\n\n".join(
+        f"[{i + 1}] source={x.get('source','unknown')} | title={x.get('title','Untitled')} | page={x.get('page','')} | url={x.get('url','')}\n{x.get('snippet','')[:2200]}"
+        for i, x in enumerate(evidence[:16])
     )
-    prompt = f"Question: {query}\n\nEvidence:\n{context}\n\nAnswer using the evidence where relevant. Do not invent citations. Separate verified facts from interpretation."
+    prompt = f"Question: {query}\n\nEvidence:\n{context}\n\nAnswer using the evidence where relevant. Cite sources as [1], [2], etc. Separate verified facts from interpretation and identify conflicts between sources."
     response = await call_model(prompt)
     return {
         "query": query,
         "answer": response,
-        "sources": evidence[:12],
+        "sources": evidence[:16],
         "memory_hits": len(memory_hits),
         "live_hits": len(live_evidence),
         "research": research,
