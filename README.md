@@ -7,12 +7,13 @@ T.A.R. is an open, community-governed multimodal AI knowledge network designed t
 - Conversational AI and coding
 - Retrieval-augmented generation (RAG)
 - Persistent research memory backed by SQLAlchemy/SQLite
-- Web and archive ingestion
+- PDF, text, CSV, and JSON ingestion with chunking and SHA-256 deduplication
+- Hybrid recall across remembered source records and ingested document chunks
+- Web and archive research
 - Wikipedia/Wikidata connectors
 - Library of Congress connector
 - National Archives catalog connector
-- Dawes/Freedmen dataset ingestion foundation
-- PDF/document/data processing
+- Dawes/Freedmen dataset ingestion support through CSV/JSON/PDF imports
 - Image/video provider interfaces
 - IPFS-compatible artifact storage
 - Blockchain governance foundation
@@ -23,14 +24,17 @@ T.A.R. is an open, community-governed multimodal AI knowledge network designed t
 
 ```text
 Web UI -> FastAPI -> Orchestrator -> Model Provider
-                    |-> Persistent Memory / Retrieval
+                    |-> Hybrid Retrieval
+                    |    |-> Persistent Research Memory
+                    |    `-> Chunked Document Store
                     |-> Source Connectors
+                    |-> Ingestion Pipeline
                     |-> Artifact Storage
                     |-> Provenance Ledger
                     `-> Governance
 ```
 
-Research now follows a memory-first flow: T.A.R. recalls stored evidence, optionally performs live source searches, persists new records, deduplicates them, and gives the model a combined evidence set.
+T.A.R. follows a memory-first flow: it recalls stored evidence and ingested documents, optionally performs live source searches, persists new records, deduplicates them, and gives the model a combined evidence set with source metadata.
 
 ## Quick start
 
@@ -43,12 +47,15 @@ Research now follows a memory-first flow: T.A.R. recalls stored evidence, option
 ## API
 
 - `GET /health` — service and memory status
-- `POST /v1/ask` — answer using stored memory plus optional live research
+- `POST /v1/ask` — answer using stored memory, ingested documents, and optional live research
 - `POST /v1/search` — search configured archives and optionally persist results
-- `POST /v1/memory/recall` — query persistent T.A.R. memory directly
+- `POST /v1/memory/recall` — hybrid recall across memory and document chunks
 - `GET /v1/memory/stats` — record counts by source
+- `POST /v1/ingest/file` — ingest PDF, TXT, MD, CSV, or JSON up to 100 MB
+- `GET /v1/ingest/jobs/{job_id}` — inspect ingestion status
+- `GET /v1/documents` — list ingested documents
 
-Example:
+Example research request:
 
 ```bash
 curl -X POST http://localhost:8000/v1/ask \
@@ -56,17 +63,26 @@ curl -X POST http://localhost:8000/v1/ask \
   -d '{"query":"Find primary-source material about Freedmen enrollment records","research":true}'
 ```
 
+Example document ingestion:
+
+```bash
+curl -X POST http://localhost:8000/v1/ingest/file \
+  -F 'file=@records.pdf' \
+  -F 'source=freedmen_records' \
+  -F 'title=Freedmen Enrollment Records'
+```
+
 ## Knowledge sources
 
 Connectors are adapters. T.A.R. does not silently mirror entire third-party collections. It retrieves public/authorized records on demand, preserves citations and metadata, and can index permitted datasets supplied by operators.
 
-Included adapters cover Wikipedia, Wikidata, Library of Congress, the U.S. National Archives catalog, and local CSV/JSON archival datasets such as properly sourced Dawes or Freedmen roll exports.
+Included adapters cover Wikipedia, Wikidata, Library of Congress, the U.S. National Archives catalog, and local archival datasets such as properly sourced Dawes or Freedmen roll exports.
 
-## Persistent memory
+## Persistent memory and document store
 
-Research records are stored in the configured SQLAlchemy database (`TAR_DATABASE_URL`, SQLite by default). Records retain source, title, URL, evidence text, confidence, and creation time. Repeated retrievals update existing source records rather than blindly duplicating them.
+Research records are stored in the configured SQLAlchemy database (`TAR_DATABASE_URL`, SQLite by default). Ingested documents retain source, title, URI, media type, SHA-256 digest, document ID, chunk ordering, page references where available, and ingestion metadata.
 
-The current recall implementation uses lightweight lexical relevance so the service works without downloading an embedding model. A vector backend can be layered on later without changing the API contract.
+Repeated source retrievals update existing memory records and identical files are deduplicated by digest. Hybrid retrieval combines remembered source snippets and relevant document chunks before the model generates an answer.
 
 ## Safety and privacy
 
@@ -74,7 +90,7 @@ Do not place secrets, private medical records, personal identifiers, copyrighted
 
 ## Status
 
-**Phase 2: persistent memory and research orchestration.** The API now retains retrieved evidence across requests and can answer from combined memory + live sources. Upcoming work includes durable ingestion jobs, hybrid vector/keyword retrieval, document chunking, authenticated user workspaces, and richer multimodal providers.
+**Phase 3: durable ingestion and hybrid retrieval.** T.A.R. now retains research across requests and can absorb large PDFs and archival datasets into a searchable chunk store. Next work expands authenticated workspaces, autonomous tool execution, coding/data sandboxes, image/video/audio providers, richer provenance, and distributed node execution.
 
 Image/video providers require valid credentials and supported APIs; T.A.R. does not ship fake provider endpoints.
 
