@@ -6,18 +6,19 @@ from pydantic import BaseModel, Field
 from .agent_router import execute_task
 from .artifacts import get_artifact, list_artifacts
 from .auth import require_identity
-from .control import audit, audit_tail, create_api_key, create_workspace, heartbeat_node, list_nodes, register_node
+from .control import audit, audit_tail, create_api_key, create_workspace, heartbeat_node, list_nodes, register_node, verify_audit_chain
 from .governance import proposal as governance_proposal, status as governance_status
 from .ingestion import get_job, ingest_bytes, list_documents
 from .jobs_api import router as jobs_router
 from .memory import remember, stats
 from .orchestrator import answer
 from .retrieval import hybrid_recall
+from .security import require_admin
 from .settings import settings
 from .sources import search_all
 from .tools import analyze_csv, image_metadata
 
-app = FastAPI(title="T.A.R. API", version="0.6.0")
+app = FastAPI(title="T.A.R. API", version="0.7.0")
 app.add_middleware(CORSMiddleware, allow_origins=settings.allowed_origins, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 app.include_router(jobs_router)
 
@@ -64,7 +65,7 @@ class NodeRequest(BaseModel):
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "service": "tar-api", "version": "0.6.0", "memory": stats(), "governance": governance_status()}
+    return {"status": "ok", "service": "tar-api", "version": "0.7.0", "memory": stats(), "governance": governance_status()}
 
 
 @app.post("/v1/ask")
@@ -177,27 +178,35 @@ def artifact(artifact_id: str, identity: dict = Depends(require_identity)):
 
 
 @app.post("/v1/admin/workspaces")
-def new_workspace(req: WorkspaceRequest, identity: dict = Depends(require_identity)):
+def new_workspace(req: WorkspaceRequest, admin: dict = Depends(require_admin)):
     return create_workspace(req.name, req.owner)
 
 
 @app.post("/v1/admin/api-keys")
-def new_api_key(req: KeyRequest, identity: dict = Depends(require_identity)):
-    return create_api_key(req.label, req.workspace_id)
+def new_api_key(req: KeyRequest, admin: dict = Depends(require_admin)):
+    try:
+        return create_api_key(req.label, req.workspace_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.get("/v1/audit")
 def audit_log(limit: int = 100, identity: dict = Depends(require_identity)):
-    return {"events": audit_tail(max(1, min(limit, 500)))}
+    return {"events": audit_tail(max(1, min(limit, 500)), workspace_id=identity["workspace_id"])}
+
+
+@app.get("/v1/audit/verify")
+def audit_verify(identity: dict = Depends(require_identity)):
+    return verify_audit_chain(identity["workspace_id"])
 
 
 @app.post("/v1/nodes")
-def node_register(req: NodeRequest, identity: dict = Depends(require_identity)):
+def node_register(req: NodeRequest, admin: dict = Depends(require_admin)):
     return register_node(req.name, req.endpoint, req.capabilities)
 
 
 @app.post("/v1/nodes/{node_id}/heartbeat")
-def node_heartbeat(node_id: str, identity: dict = Depends(require_identity)):
+def node_heartbeat(node_id: str, admin: dict = Depends(require_admin)):
     result = heartbeat_node(node_id)
     if not result:
         raise HTTPException(status_code=404, detail="Node not found")
