@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from .autonomy_api import router as autonomy_router
+from .commission_api import router as commission_router
 from .config_validation import validate_production_config
 from .library_api import router as library_router
 from .main import app
@@ -17,3 +18,4 @@ app.include_router(operations_router)
 app.include_router(publication_router)
 app.include_router(library_router)
 app.include_router(autonomy_router)
+app.include_router(commission_router)
