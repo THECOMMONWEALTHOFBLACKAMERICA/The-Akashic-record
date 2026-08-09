@@ -33,6 +33,8 @@ def publish(req: PublishRequest, admin: dict = Depends(require_admin)):
         result = publish_artifact(req.artifact_id, req.workspace_id)
     except KeyError:
         raise HTTPException(status_code=404, detail="Artifact not found")
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
     except (IPFSPublicationDisabled, IPFSError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     audit(

@@ -12,7 +12,7 @@ from sqlalchemy.orm import Mapped, Session, mapped_column
 from .bootstrap import schema_bootstrap_enabled
 from .memory import Base, engine
 from .schema import ensure_workspace_columns
-from .storage import configured_storage, read_artifact_uri
+from .storage import configured_storage, delete_artifact_uri, read_artifact_uri
 
 
 class ArtifactRecord(Base):
@@ -38,6 +38,15 @@ def _safe_name(name: str, fallback: str) -> str:
     return "".join(c for c in Path(name).name if c.isalnum() or c in "._-") or fallback
 
 
+def artifact_metadata(row: ArtifactRecord) -> dict:
+    return json.loads(row.metadata_json or "{}")
+
+
+def is_protected_artifact(row: ArtifactRecord) -> bool:
+    metadata = artifact_metadata(row)
+    return metadata.get("classification") == "commission_original_evidence" or metadata.get("public_ipfs_allowed") is False
+
+
 def save_artifact(name: str, data: bytes, media_type: str, metadata: dict | None = None, workspace_id: str = "default") -> dict:
     artifact_id = uuid.uuid4().hex
     safe = _safe_name(name, artifact_id)
@@ -58,10 +67,12 @@ def save_artifact(name: str, data: bytes, media_type: str, metadata: dict | None
     return {"artifact_id": artifact_id, "name": safe, "media_type": media_type, "sha256": digest, "size_bytes": len(data), "workspace_id": workspace_id, "storage_backend": storage.name}
 
 
-def get_artifact(artifact_id: str, workspace_id: str = "default") -> tuple[ArtifactRecord, bytes] | None:
+def get_artifact(artifact_id: str, workspace_id: str = "default", *, include_protected: bool = False) -> tuple[ArtifactRecord, bytes] | None:
     with Session(engine) as session:
         row = session.scalar(select(ArtifactRecord).where(ArtifactRecord.artifact_id == artifact_id, ArtifactRecord.workspace_id == workspace_id))
         if not row:
+            return None
+        if is_protected_artifact(row) and not include_protected:
             return None
         session.expunge(row)
     data = read_artifact_uri(row.path)
@@ -72,7 +83,23 @@ def get_artifact(artifact_id: str, workspace_id: str = "default") -> tuple[Artif
     return row, data
 
 
-def list_artifacts(limit: int = 100, workspace_id: str = "default") -> list[dict]:
+def delete_artifact(artifact_id: str, workspace_id: str = "default") -> bool:
     with Session(engine) as session:
-        rows = session.scalars(select(ArtifactRecord).where(ArtifactRecord.workspace_id == workspace_id).order_by(ArtifactRecord.created_at.desc()).limit(limit)).all()
-    return [{"artifact_id": r.artifact_id, "name": r.name, "media_type": r.media_type, "sha256": r.sha256, "size_bytes": r.size_bytes, "storage_backend": json.loads(r.metadata_json or "{}").get("storage_backend", "legacy-local"), "created_at": r.created_at.isoformat() if r.created_at else None} for r in rows]
+        row = session.scalar(select(ArtifactRecord).where(ArtifactRecord.artifact_id == artifact_id, ArtifactRecord.workspace_id == workspace_id))
+        if not row:
+            return False
+        path = row.path
+        session.delete(row)
+        session.commit()
+    delete_artifact_uri(path)
+    return True
+
+
+def list_artifacts(limit: int = 100, workspace_id: str = "default", *, include_protected: bool = False) -> list[dict]:
+    with Session(engine) as session:
+        rows = session.scalars(select(ArtifactRecord).where(ArtifactRecord.workspace_id == workspace_id).order_by(ArtifactRecord.created_at.desc()).limit(limit * 3 if not include_protected else limit)).all()
+    if not include_protected:
+        rows = [row for row in rows if not is_protected_artifact(row)][:limit]
+    else:
+        rows = rows[:limit]
+    return [{"artifact_id": r.artifact_id, "name": r.name, "media_type": r.media_type, "sha256": r.sha256, "size_bytes": r.size_bytes, "storage_backend": artifact_metadata(r).get("storage_backend", "legacy-local"), "created_at": r.created_at.isoformat() if r.created_at else None} for r in rows]

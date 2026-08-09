@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.1.0-rc.1
+
+### Foundational Citizenship Commission case engine
+- added authenticated Commission case management under `/v1/commission`
+- Commission APIs require a real T.A.R. API key even when the general development API permits anonymous access
+- API-key identities now expose stable `key_id` values for case-level authorization grants
+- case access is credential-scoped with owner, commissioner, staff, reviewer and read-only roles
+- only owners/commissioners can manage access, legal holds, retention settings and final case dispositions
+- added evidence source tiers and human-review statuses: verified, corroborated, conflicting, unverified, insufficient and excluded
+- applicant uploads preserve SHA-256, uploader, claimed provenance, source metadata and protected original artifact storage
+- Commission original evidence is explicitly blocked from public IPFS publication, including administrative publication attempts
+- restricted Commission research defaults to workspace/vetted material and official archival strategies; broad web/Wikipedia/Wikidata require an intentional override
+- retrieved research enters the case as unverified evidence rather than an automated citizenship determination
+- legal holds block deletion
+- policy-authorized deletion removes case/evidence rows, revokes case grants and attempts protected artifact cleanup while reporting any incomplete cleanup
+- Commission model, access, retention and IPFS-guard tests added
+- Alembic revision `0005_commission_cases` adds case, evidence and case-access persistence
+- system capability reporting now advertises the Commission case engine and its public-IPFS prohibition
+
 ## 1.0.0-rc.1
 
 ### Final qualification

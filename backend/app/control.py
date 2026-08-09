@@ -81,10 +81,13 @@ def create_api_key(label: str, workspace_id: str = "default") -> dict:
     with Session(engine) as session:
         if not session.get(Workspace, workspace_id):
             raise ValueError("Unknown workspace")
-        session.add(ApiKey(label=label, key_hash=_hash_key(raw), workspace_id=workspace_id))
+        row = ApiKey(label=label, key_hash=_hash_key(raw), workspace_id=workspace_id)
+        session.add(row)
         session.commit()
-    audit("api_key.created", "api_key", label, {"workspace_id": workspace_id}, workspace_id=workspace_id)
-    return {"api_key": raw, "label": label, "workspace_id": workspace_id}
+        session.refresh(row)
+        key_id = str(row.id)
+    audit("api_key.created", "api_key", label, {"workspace_id": workspace_id, "key_id": key_id}, workspace_id=workspace_id)
+    return {"api_key": raw, "key_id": key_id, "label": label, "workspace_id": workspace_id}
 
 
 def verify_api_key(raw: str) -> dict | None:
@@ -92,7 +95,7 @@ def verify_api_key(raw: str) -> dict | None:
         return None
     with Session(engine) as session:
         row = session.scalar(select(ApiKey).where(ApiKey.key_hash == _hash_key(raw), ApiKey.active.is_(True)))
-        return {"workspace_id": row.workspace_id, "label": row.label} if row else None
+        return {"workspace_id": row.workspace_id, "label": row.label, "key_id": str(row.id)} if row else None
 
 
 def create_workspace(name: str, owner: str = "local") -> dict:
@@ -120,11 +123,13 @@ def audit(action: str, object_type: str = "", object_id: str = "", payload: dict
     return {"event_id": event_id, "event_hash": event_hash, "prev_hash": prev_hash}
 
 
-def audit_tail(limit: int = 100, workspace_id: str | None = None) -> list[dict]:
+def audit_tail(limit: int = 100, workspace_id: str | None = None, *, include_commission: bool = False) -> list[dict]:
     with Session(engine) as session:
         stmt = select(AuditEvent)
         if workspace_id:
             stmt = stmt.where(AuditEvent.workspace_id == workspace_id)
+        if not include_commission:
+            stmt = stmt.where(~AuditEvent.action.like("commission.%"))
         rows = session.scalars(stmt.order_by(AuditEvent.id.desc()).limit(limit)).all()
     return [{"event_id": r.event_id, "workspace_id": r.workspace_id, "actor": r.actor, "action": r.action, "object_type": r.object_type, "object_id": r.object_id, "payload": json.loads(r.payload_json or "{}").get("payload", {}), "prev_hash": r.prev_hash, "event_hash": r.event_hash, "created_at": r.created_at.isoformat() if r.created_at else None} for r in rows]
 

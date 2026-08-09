@@ -16,71 +16,32 @@ router = APIRouter(prefix="/v1/system", tags=["operations"])
 def _autonomy_status() -> dict:
     raw_tools = os.getenv("TAR_AUTONOMY_TOOLS", "search,recall,research,pdf,docx,image,video")
     tools = [x.strip() for x in raw_tools.split(",") if x.strip()]
-    try:
-        max_steps = max(1, min(int(os.getenv("TAR_AUTONOMY_MAX_STEPS", "6")), 10))
-    except ValueError:
-        max_steps = 6
+    try: max_steps = max(1, min(int(os.getenv("TAR_AUTONOMY_MAX_STEPS", "6")), 10))
+    except ValueError: max_steps = 6
     return {"enabled": bool(tools), "max_steps": max_steps, "tools": tools, "code_execution": False}
 
-
 @router.get("/version")
-def version():
-    return {"service": "tar-api", "version": VERSION}
-
+def version(): return {"service":"tar-api","version":VERSION}
 
 @router.get("/providers")
 def providers(identity: dict = Depends(require_identity)):
-    result = provider_status()
-    result["semantic_retrieval"] = semantic_status()
-    result["web_search"] = {"configured": bool(os.getenv("TAR_SEARXNG_URL", "").strip()), "provider": "searxng"}
-    result["autonomy"] = _autonomy_status()
-    return result
-
+    result=provider_status(); result["semantic_retrieval"]=semantic_status(); result["web_search"]={"configured":bool(os.getenv("TAR_SEARXNG_URL","").strip()),"provider":"searxng"}; result["autonomy"]=_autonomy_status(); return result
 
 @router.get("/storage")
-def storage(identity: dict = Depends(require_identity)):
-    return configured_storage().health()
-
+def storage(identity: dict = Depends(require_identity)): return configured_storage().health()
 
 @router.get("/capabilities")
 def capabilities(identity: dict = Depends(require_identity)):
-    providers = provider_status()["configured"]
-    semantic = semantic_status()
-    storage_status = configured_storage().health()
-    web_configured = bool(os.getenv("TAR_SEARXNG_URL", "").strip())
+    providers=provider_status()["configured"]; semantic=semantic_status(); storage_status=configured_storage().health(); web_configured=bool(os.getenv("TAR_SEARXNG_URL","").strip())
     return {
-        "version": VERSION,
-        "research": True,
-        "autonomy": _autonomy_status(),
-        "retrieval": {
-            "lexical": True,
-            "semantic": semantic["active"],
-            "semantic_requested": semantic["requested"],
-            "current_web": web_configured,
-        },
-        "artifact_storage": {
-            "backend": storage_status.get("backend"),
-            "ready": bool(storage_status.get("ok")),
-        },
-        "ingestion": ["txt", "md", "csv", "json", "pdf", "epub", "docx", "xlsx", "pptx"],
-        "documents": ["pdf_create", "pdf_merge", "pdf_annotate", "docx_create", "xlsx_create"],
-        "distributed_jobs": True,
-        "audit_verification": True,
-        "media": {
-            "image_generation": providers["image"],
-            "image_edit": providers["image_edit"],
-            "video_generation": providers["video"],
-            "transcription": providers["transcription"],
-        },
-        "sources": {
-            "current_web": web_configured,
-            "wikipedia": True,
-            "wikidata": True,
-            "library_of_congress": True,
-            "pubmed": True,
-            "nara": providers["nara"],
-            "dawes_strategy": True,
-            "freedmen_strategy": True,
-        },
-        "governance": providers["governance"],
+        "version":VERSION,"research":True,"autonomy":_autonomy_status(),
+        "commission":{"case_engine":True,"case_level_access":True,"restricted_research":True,"evidence_statuses":["verified","corroborated","conflicting","unverified","insufficient","excluded"],"public_ipfs_for_original_evidence":False},
+        "retrieval":{"lexical":True,"semantic":semantic["active"],"semantic_requested":semantic["requested"],"current_web":web_configured},
+        "artifact_storage":{"backend":storage_status.get("backend"),"ready":bool(storage_status.get("ok"))},
+        "ingestion":["txt","md","csv","json","pdf","epub","docx","xlsx","pptx"],
+        "documents":["pdf_create","pdf_merge","pdf_annotate","docx_create","xlsx_create"],
+        "distributed_jobs":True,"audit_verification":True,
+        "media":{"image_generation":providers["image"],"image_edit":providers["image_edit"],"video_generation":providers["video"],"transcription":providers["transcription"]},
+        "sources":{"current_web":web_configured,"wikipedia":True,"wikidata":True,"library_of_congress":True,"pubmed":True,"nara":providers["nara"],"dawes_strategy":True,"freedmen_strategy":True},
+        "governance":providers["governance"],
     }
