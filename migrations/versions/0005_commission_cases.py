@@ -56,7 +56,6 @@ def upgrade() -> None:
         sa.Column("exclusion_reason", sa.Text(), nullable=False, server_default=""),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
-        sa.UniqueConstraint("evidence_id"),
         sa.UniqueConstraint("case_id", "evidence_id", name="uq_commission_case_evidence"),
     )
     op.create_index("ix_commission_evidence_evidence_id", "commission_evidence", ["evidence_id"], unique=True)
