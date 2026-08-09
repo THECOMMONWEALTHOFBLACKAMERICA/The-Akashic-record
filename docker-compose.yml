@@ -4,7 +4,7 @@ services:
     environment:
       POSTGRES_DB: tar
       POSTGRES_USER: tar
-      POSTGRES_PASSWORD: tar_dev_change_me
+      POSTGRES_PASSWORD: ${TAR_POSTGRES_PASSWORD:?set TAR_POSTGRES_PASSWORD in .env}
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U tar -d tar"]
       interval: 5s
@@ -19,7 +19,7 @@ services:
       dockerfile: backend/Dockerfile
     env_file: .env
     environment:
-      TAR_DATABASE_URL: postgresql+psycopg://tar:tar_dev_change_me@postgres:5432/tar
+      TAR_DATABASE_URL: postgresql+psycopg://tar:${TAR_POSTGRES_PASSWORD}@postgres:5432/tar
       TAR_ARTIFACT_DIR: /app/data/artifacts
     ports: ["8000:8000"]
     volumes:
@@ -37,7 +37,7 @@ services:
     command: ["python", "-m", "backend.worker"]
     env_file: .env
     environment:
-      TAR_DATABASE_URL: postgresql+psycopg://tar:tar_dev_change_me@postgres:5432/tar
+      TAR_DATABASE_URL: postgresql+psycopg://tar:${TAR_POSTGRES_PASSWORD}@postgres:5432/tar
       TAR_ARTIFACT_DIR: /app/data/artifacts
       TAR_NODE_NAME: tar-worker-1
       TAR_NODE_CAPABILITIES: research,text,image,video
