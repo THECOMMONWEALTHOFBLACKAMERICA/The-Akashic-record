@@ -17,6 +17,7 @@ _original_create_all = Base.metadata.create_all
 Base.metadata.create_all = lambda *args, **kwargs: None  # type: ignore[method-assign]
 try:
     from backend.app import artifacts as _artifacts  # noqa: F401,E402
+    from backend.app import autonomy as _autonomy  # noqa: F401,E402
     from backend.app import control as _control  # noqa: F401,E402
     from backend.app import ingestion as _ingestion  # noqa: F401,E402
     from backend.app import jobs as _jobs  # noqa: F401,E402
