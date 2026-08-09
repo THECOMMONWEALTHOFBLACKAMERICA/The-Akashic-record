@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from .autonomy import run_goal
 from .media import generate_image, generate_video
 from .orchestrator import answer
 from .tools import run_python
@@ -18,6 +19,8 @@ async def execute_task(kind: str, prompt: str, options: dict | None = None, work
     kind = (kind or "research").lower()
     if kind in {"research", "answer", "text"}:
         return TaskResult(kind="text", output=await answer(prompt, research=bool(options.get("research", True)), workspace_id=workspace_id))
+    if kind in {"agent", "autonomous", "goal"}:
+        return TaskResult(kind="agent", output=await run_goal(prompt, workspace_id=workspace_id))
     if kind in {"code", "python"}:
         result = run_python(prompt, timeout=int(options.get("timeout", 10)))
         return TaskResult(kind="code", output=result)
