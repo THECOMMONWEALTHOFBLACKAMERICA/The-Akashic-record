@@ -31,7 +31,6 @@ jobs:
           images: ${{ env.IMAGE_NAME }}
           tags: |
             type=ref,event=tag
-            type=raw,value=latest
       - id: build
         uses: docker/build-push-action@v6
         with:
