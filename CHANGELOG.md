@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.15.0-rc.1
+
+### Distributed storage
+- artifacts now use a storage backend abstraction instead of assuming one host filesystem
+- S3-compatible storage supports AWS S3, MinIO and compatible object stores
+- existing legacy local artifact paths remain readable during migration
+- newly retrieved artifacts are SHA-256 verified before they are served
+- failed metadata commits clean up newly written artifact objects
+- storage health and active backend are exposed in the system API
+- optional local MinIO Compose profile added for distributed-storage testing
+
 ## 0.14.0-rc.1
 
 ### Intelligence
