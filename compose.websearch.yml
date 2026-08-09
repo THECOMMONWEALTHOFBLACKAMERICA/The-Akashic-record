@@ -1,0 +1,22 @@
+services:
+  api:
+    environment:
+      TAR_SEARXNG_URL: http://searxng:8080
+    depends_on:
+      searxng:
+        condition: service_started
+
+  worker:
+    environment:
+      TAR_SEARXNG_URL: http://searxng:8080
+    depends_on:
+      searxng:
+        condition: service_started
+
+  searxng:
+    image: searxng/searxng:latest
+    volumes:
+      - ./ops/searxng/settings.yml:/etc/searxng/settings.yml:ro
+    ports:
+      - "127.0.0.1:8888:8080"
+    restart: unless-stopped
