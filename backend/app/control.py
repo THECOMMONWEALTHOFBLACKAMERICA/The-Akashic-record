@@ -76,6 +76,8 @@ def _hash_key(key: str) -> str:
 def create_api_key(label: str, workspace_id: str = "default") -> dict:
     raw = "tar_" + secrets.token_urlsafe(32)
     with Session(engine) as session:
+        if not session.get(Workspace, workspace_id):
+            raise ValueError("Unknown workspace")
         session.add(ApiKey(label=label, key_hash=_hash_key(raw), workspace_id=workspace_id))
         session.commit()
     audit("api_key.created", "api_key", label, {"workspace_id": workspace_id}, workspace_id=workspace_id)
@@ -103,19 +105,40 @@ def audit(action: str, object_type: str = "", object_id: str = "", payload: dict
     event_id = uuid.uuid4().hex
     created = datetime.now(timezone.utc).isoformat()
     with Session(engine) as session:
-        previous = session.scalar(select(AuditEvent).order_by(AuditEvent.id.desc()).limit(1))
+        previous = session.scalar(select(AuditEvent).where(AuditEvent.workspace_id == workspace_id).order_by(AuditEvent.id.desc()).limit(1))
         prev_hash = previous.event_hash if previous else ""
         canonical = json.dumps({"event_id": event_id, "workspace_id": workspace_id, "actor": actor, "action": action, "object_type": object_type, "object_id": object_id, "payload": payload or {}, "prev_hash": prev_hash, "created_at": created}, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
         event_hash = hashlib.sha256(canonical.encode()).hexdigest()
-        session.add(AuditEvent(event_id=event_id, workspace_id=workspace_id, actor=actor, action=action, object_type=object_type, object_id=object_id, payload_json=json.dumps(payload or {}, ensure_ascii=False), prev_hash=prev_hash, event_hash=event_hash))
+        session.add(AuditEvent(event_id=event_id, workspace_id=workspace_id, actor=actor, action=action, object_type=object_type, object_id=object_id, payload_json=json.dumps({"payload": payload or {}, "canonical_created_at": created}, ensure_ascii=False), prev_hash=prev_hash, event_hash=event_hash))
         session.commit()
     return {"event_id": event_id, "event_hash": event_hash, "prev_hash": prev_hash}
 
 
-def audit_tail(limit: int = 100) -> list[dict]:
+def audit_tail(limit: int = 100, workspace_id: str | None = None) -> list[dict]:
     with Session(engine) as session:
-        rows = session.scalars(select(AuditEvent).order_by(AuditEvent.id.desc()).limit(limit)).all()
-    return [{"event_id": r.event_id, "workspace_id": r.workspace_id, "actor": r.actor, "action": r.action, "object_type": r.object_type, "object_id": r.object_id, "payload": json.loads(r.payload_json or "{}"), "prev_hash": r.prev_hash, "event_hash": r.event_hash, "created_at": r.created_at.isoformat() if r.created_at else None} for r in rows]
+        stmt = select(AuditEvent)
+        if workspace_id:
+            stmt = stmt.where(AuditEvent.workspace_id == workspace_id)
+        rows = session.scalars(stmt.order_by(AuditEvent.id.desc()).limit(limit)).all()
+    return [{"event_id": r.event_id, "workspace_id": r.workspace_id, "actor": r.actor, "action": r.action, "object_type": r.object_type, "object_id": r.object_id, "payload": json.loads(r.payload_json or "{}").get("payload", {}), "prev_hash": r.prev_hash, "event_hash": r.event_hash, "created_at": r.created_at.isoformat() if r.created_at else None} for r in rows]
+
+
+def verify_audit_chain(workspace_id: str = "default") -> dict:
+    with Session(engine) as session:
+        rows = session.scalars(select(AuditEvent).where(AuditEvent.workspace_id == workspace_id).order_by(AuditEvent.id.asc())).all()
+    previous = ""
+    for row in rows:
+        stored = json.loads(row.payload_json or "{}")
+        canonical_created_at = stored.get("canonical_created_at")
+        payload = stored.get("payload", {})
+        if not canonical_created_at:
+            return {"valid": False, "events": len(rows), "failed_event": row.event_id, "reason": "legacy event lacks canonical timestamp"}
+        canonical = json.dumps({"event_id": row.event_id, "workspace_id": row.workspace_id, "actor": row.actor, "action": row.action, "object_type": row.object_type, "object_id": row.object_id, "payload": payload, "prev_hash": previous, "created_at": canonical_created_at}, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+        expected = hashlib.sha256(canonical.encode()).hexdigest()
+        if row.prev_hash != previous or row.event_hash != expected:
+            return {"valid": False, "events": len(rows), "failed_event": row.event_id, "reason": "hash mismatch"}
+        previous = row.event_hash
+    return {"valid": True, "events": len(rows), "head": previous, "workspace_id": workspace_id}
 
 
 def register_node(name: str, endpoint: str = "", capabilities: list[str] | None = None) -> dict:
