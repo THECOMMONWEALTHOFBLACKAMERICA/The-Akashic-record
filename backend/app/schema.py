@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import os
+
 from sqlalchemy import inspect, text
 from sqlalchemy.engine import Engine
 
 
 def ensure_workspace_columns(engine: Engine) -> None:
-    """Add workspace columns to pre-v0.11 databases without destructive migrations."""
+    """Repair pre-v0.11 local databases only outside migration discovery."""
+    if os.getenv("TAR_MIGRATION_CONTEXT", "").lower() in {"1", "true", "yes"}:
+        return
     targets = {
         "memory_records": "workspace_id VARCHAR(64) NOT NULL DEFAULT 'default'",
         "documents": "workspace_id VARCHAR(64) NOT NULL DEFAULT 'default'",

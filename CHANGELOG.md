@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.17.0-rc.1
+
+### Current knowledge and reading library
+- added safe native EPUB metadata/chapter extraction and ingestion
+- added operator-controlled SearXNG current-web metasearch with provenance and publication dates when supplied
+- web search remains optional and archive-only research continues when no metasearch endpoint is configured
+- added workspace-scoped research library favorites, progress, locators and notes
+- added Alembic migration for library state
+- added explicit development-only schema bootstrap so Alembic is authoritative for PostgreSQL production
+- Alembic model discovery no longer creates or repairs tables as an import side effect
+- added EPUB, web connector and library isolation tests
+- feature direction was informed by the MIT-licensed `Luiz-eduardp/akashic_records` reader project; T.A.R. ports compatible concepts into its own backend rather than copying unrelated novel scraping plugins
+
 ## 0.16.0-rc.1
 
 ### Public provenance
