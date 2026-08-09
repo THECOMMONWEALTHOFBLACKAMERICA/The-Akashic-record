@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, Float, Integer, String, Text, select
+from sqlalchemy import Boolean, DateTime, Float, Integer, String, Text, UniqueConstraint, select
 from sqlalchemy.orm import Mapped, Session, mapped_column
 
 from .bootstrap import schema_bootstrap_enabled
@@ -12,6 +12,8 @@ from .memory import Base, engine
 
 class LibraryEntry(Base):
     __tablename__ = "library_entries"
+    __table_args__ = (UniqueConstraint("workspace_id", "document_id", name="uq_library_workspace_document"),)
+
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     workspace_id: Mapped[str] = mapped_column(String(64), index=True)
     document_id: Mapped[str] = mapped_column(String(64), index=True)
