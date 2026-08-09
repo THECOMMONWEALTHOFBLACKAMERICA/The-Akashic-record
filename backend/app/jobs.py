@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import DateTime, Integer, String, Text, select
 from sqlalchemy.orm import Mapped, Session, mapped_column
 
+from .bootstrap import schema_bootstrap_enabled
 from .memory import Base, engine
 
 
@@ -27,7 +28,8 @@ class TaskJob(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
 
-Base.metadata.create_all(engine)
+if schema_bootstrap_enabled():
+    Base.metadata.create_all(engine)
 
 
 def enqueue(kind: str, prompt: str, options: dict | None = None, workspace_id: str = "default") -> dict:
@@ -41,9 +43,7 @@ def enqueue(kind: str, prompt: str, options: dict | None = None, workspace_id: s
 def get_job(job_id: str) -> dict | None:
     with Session(engine) as session:
         row = session.get(TaskJob, job_id)
-        if not row:
-            return None
-        return _serialize(row)
+        return _serialize(row) if row else None
 
 
 def _expired(row: TaskJob, now: datetime) -> bool:
@@ -58,27 +58,11 @@ def _expired(row: TaskJob, now: datetime) -> bool:
 
 
 def claim(node_id: str, capabilities: list[str] | None = None, lease_seconds: int = 120) -> dict | None:
-    """Atomically lease one compatible job.
-
-    PostgreSQL uses FOR UPDATE SKIP LOCKED so concurrent workers cannot lease the
-    same row. SQLAlchemy omits unsupported locking syntax for SQLite development.
-    """
     now = datetime.now(timezone.utc)
     with Session(engine) as session:
-        stmt = (
-            select(TaskJob)
-            .where(TaskJob.status.in_(["queued", "running"]))
-            .order_by(TaskJob.created_at.asc())
-            .limit(100)
-            .with_for_update(skip_locked=True)
-        )
+        stmt = select(TaskJob).where(TaskJob.status.in_(["queued", "running"])).order_by(TaskJob.created_at.asc()).limit(100).with_for_update(skip_locked=True)
         rows = session.scalars(stmt).all()
-        candidate = None
-        for row in rows:
-            eligible = not capabilities or row.kind in capabilities or "*" in capabilities
-            if eligible and (row.status == "queued" or _expired(row, now)):
-                candidate = row
-                break
+        candidate = next((row for row in rows if (not capabilities or row.kind in capabilities or "*" in capabilities) and (row.status == "queued" or _expired(row, now))), None)
         if not candidate:
             session.rollback()
             return None
@@ -124,18 +108,7 @@ def fail(job_id: str, node_id: str, error: str, retry: bool = True, max_attempts
 
 
 def _serialize(row: TaskJob, include_prompt: bool = False) -> dict:
-    out = {
-        "job_id": row.id,
-        "workspace_id": row.workspace_id,
-        "kind": row.kind,
-        "status": row.status,
-        "result": json.loads(row.result_json) if row.result_json else None,
-        "error": row.error,
-        "assigned_node": row.assigned_node,
-        "attempts": row.attempts,
-        "created_at": row.created_at.isoformat() if row.created_at else None,
-        "updated_at": row.updated_at.isoformat() if row.updated_at else None,
-    }
+    out = {"job_id": row.id, "workspace_id": row.workspace_id, "kind": row.kind, "status": row.status, "result": json.loads(row.result_json) if row.result_json else None, "error": row.error, "assigned_node": row.assigned_node, "attempts": row.attempts, "created_at": row.created_at.isoformat() if row.created_at else None, "updated_at": row.updated_at.isoformat() if row.updated_at else None}
     if include_prompt:
         out["prompt"] = row.prompt
         out["options"] = json.loads(row.options_json or "{}")
