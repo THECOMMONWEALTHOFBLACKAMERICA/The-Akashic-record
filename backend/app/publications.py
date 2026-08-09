@@ -34,7 +34,7 @@ def publish_artifact(artifact_id: str, workspace_id: str) -> dict:
     existing = latest_publication(artifact_id, workspace_id)
     if existing:
         return {**existing, "deduplicated": True}
-    found = get_artifact(artifact_id, workspace_id)
+    found = get_artifact(artifact_id, workspace_id, include_protected=True)
     if not found:
         raise KeyError("artifact not found")
     row, data = found
