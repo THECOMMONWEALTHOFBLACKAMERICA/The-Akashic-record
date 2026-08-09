@@ -30,6 +30,7 @@ jobs:
       TAR_ENABLE_CODE_EXECUTION: "false"
       TAR_REQUIRE_API_KEY: "false"
       TAR_LLM_PROVIDER: echo
+      TAR_ENABLE_SEMANTIC_RETRIEVAL: "false"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -62,6 +63,22 @@ jobs:
         run: |
           cat /tmp/tar-api.log || true
           cat /tmp/tar-worker.log || true
+
+  governance-contract:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: contracts
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: contracts/package-lock.json
+      - run: npm install --package-lock-only
+      - run: npm ci
+      - run: npm test
 
   docker-build:
     runs-on: ubuntu-latest
