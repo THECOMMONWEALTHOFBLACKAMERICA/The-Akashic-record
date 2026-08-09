@@ -13,6 +13,16 @@ from .version import VERSION
 router = APIRouter(prefix="/v1/system", tags=["operations"])
 
 
+def _autonomy_status() -> dict:
+    raw_tools = os.getenv("TAR_AUTONOMY_TOOLS", "search,recall,research,pdf,docx,image,video")
+    tools = [x.strip() for x in raw_tools.split(",") if x.strip()]
+    try:
+        max_steps = max(1, min(int(os.getenv("TAR_AUTONOMY_MAX_STEPS", "6")), 10))
+    except ValueError:
+        max_steps = 6
+    return {"enabled": bool(tools), "max_steps": max_steps, "tools": tools, "code_execution": False}
+
+
 @router.get("/version")
 def version():
     return {"service": "tar-api", "version": VERSION}
@@ -23,6 +33,7 @@ def providers(identity: dict = Depends(require_identity)):
     result = provider_status()
     result["semantic_retrieval"] = semantic_status()
     result["web_search"] = {"configured": bool(os.getenv("TAR_SEARXNG_URL", "").strip()), "provider": "searxng"}
+    result["autonomy"] = _autonomy_status()
     return result
 
 
@@ -40,6 +51,7 @@ def capabilities(identity: dict = Depends(require_identity)):
     return {
         "version": VERSION,
         "research": True,
+        "autonomy": _autonomy_status(),
         "retrieval": {
             "lexical": True,
             "semantic": semantic["active"],

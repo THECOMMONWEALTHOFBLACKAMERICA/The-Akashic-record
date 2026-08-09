@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.18.0-rc.1
+
+### Bounded autonomous runtime
+- added persistent multi-step agent runs and per-step execution records
+- planner uses a hard allowlist and a configurable maximum of 10 steps
+- safe autonomous tools are limited to search, recall, research, PDF/DOCX generation and configured image/video generation
+- autonomous planning explicitly excludes shell/code execution, credential operations, purchases, messaging, destructive actions and governance mutation
+- every run remains workspace-scoped and can be retrieved only from its owning workspace
+- autonomous goals can execute directly through `/v1/agents/run` or through the durable task/worker system using task kind `agent`
+- planner falls back to deterministic research plans when no planning-capable model is configured
+- completed/failed runs are audited through the existing workspace audit chain
+- Alembic migration and autonomy boundary tests added
+
 ## 0.17.0-rc.1
 
 ### Current knowledge and reading library
