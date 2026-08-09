@@ -12,7 +12,7 @@ from sqlalchemy.orm import Mapped, Session, mapped_column
 from .bootstrap import schema_bootstrap_enabled
 from .memory import Base, engine
 from .schema import ensure_workspace_columns
-from .storage import configured_storage, read_artifact_uri
+from .storage import configured_storage, delete_artifact_uri, read_artifact_uri
 
 
 class ArtifactRecord(Base):
@@ -39,37 +39,35 @@ def _safe_name(name: str, fallback: str) -> str:
 
 
 def save_artifact(name: str, data: bytes, media_type: str, metadata: dict | None = None, workspace_id: str = "default") -> dict:
-    artifact_id = uuid.uuid4().hex
-    safe = _safe_name(name, artifact_id)
-    object_name = f"{artifact_id}-{safe}"
-    digest = hashlib.sha256(data).hexdigest()
-    storage = configured_storage()
-    uri = storage.put(workspace_id, object_name, data, media_type)
-    enriched_metadata = {"storage_backend": storage.name, **(metadata or {})}
+    artifact_id = uuid.uuid4().hex; safe = _safe_name(name, artifact_id); object_name = f"{artifact_id}-{safe}"; digest = hashlib.sha256(data).hexdigest(); storage = configured_storage(); uri = storage.put(workspace_id, object_name, data, media_type); enriched_metadata = {"storage_backend": storage.name, **(metadata or {})}
     try:
         with Session(engine) as session:
-            session.add(ArtifactRecord(artifact_id=artifact_id, workspace_id=workspace_id, name=safe, media_type=media_type, path=uri, sha256=digest, size_bytes=len(data), metadata_json=json.dumps(enriched_metadata, ensure_ascii=False)))
-            session.commit()
+            session.add(ArtifactRecord(artifact_id=artifact_id, workspace_id=workspace_id, name=safe, media_type=media_type, path=uri, sha256=digest, size_bytes=len(data), metadata_json=json.dumps(enriched_metadata, ensure_ascii=False))); session.commit()
     except Exception:
-        try:
-            storage.delete(uri)
-        finally:
-            raise
+        try: storage.delete(uri)
+        finally: raise
     return {"artifact_id": artifact_id, "name": safe, "media_type": media_type, "sha256": digest, "size_bytes": len(data), "workspace_id": workspace_id, "storage_backend": storage.name}
 
 
 def get_artifact(artifact_id: str, workspace_id: str = "default") -> tuple[ArtifactRecord, bytes] | None:
     with Session(engine) as session:
         row = session.scalar(select(ArtifactRecord).where(ArtifactRecord.artifact_id == artifact_id, ArtifactRecord.workspace_id == workspace_id))
-        if not row:
-            return None
+        if not row: return None
         session.expunge(row)
     data = read_artifact_uri(row.path)
-    if data is None:
-        return None
-    if hashlib.sha256(data).hexdigest() != row.sha256:
-        raise RuntimeError(f"Artifact integrity check failed for {artifact_id}")
+    if data is None: return None
+    if hashlib.sha256(data).hexdigest() != row.sha256: raise RuntimeError(f"Artifact integrity check failed for {artifact_id}")
     return row, data
+
+
+def delete_artifact(artifact_id: str, workspace_id: str = "default") -> bool:
+    with Session(engine) as session:
+        row = session.scalar(select(ArtifactRecord).where(ArtifactRecord.artifact_id == artifact_id, ArtifactRecord.workspace_id == workspace_id))
+        if not row: return False
+        path = row.path
+        session.delete(row); session.commit()
+    delete_artifact_uri(path)
+    return True
 
 
 def list_artifacts(limit: int = 100, workspace_id: str = "default") -> list[dict]:
