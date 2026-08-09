@@ -81,10 +81,13 @@ def create_api_key(label: str, workspace_id: str = "default") -> dict:
     with Session(engine) as session:
         if not session.get(Workspace, workspace_id):
             raise ValueError("Unknown workspace")
-        session.add(ApiKey(label=label, key_hash=_hash_key(raw), workspace_id=workspace_id))
+        row = ApiKey(label=label, key_hash=_hash_key(raw), workspace_id=workspace_id)
+        session.add(row)
         session.commit()
-    audit("api_key.created", "api_key", label, {"workspace_id": workspace_id}, workspace_id=workspace_id)
-    return {"api_key": raw, "label": label, "workspace_id": workspace_id}
+        session.refresh(row)
+        key_id = str(row.id)
+    audit("api_key.created", "api_key", label, {"workspace_id": workspace_id, "key_id": key_id}, workspace_id=workspace_id)
+    return {"api_key": raw, "key_id": key_id, "label": label, "workspace_id": workspace_id}
 
 
 def verify_api_key(raw: str) -> dict | None:
