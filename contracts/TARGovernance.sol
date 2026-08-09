@@ -48,6 +48,7 @@ contract TARGovernance {
 
     constructor(uint256 initialQuorum, uint256 initialTimelockSeconds) {
         require(initialQuorum > 0 && initialQuorum <= type(uint128).max, "invalid quorum");
+        require(initialTimelockSeconds <= type(uint64).max - block.timestamp, "timelock overflow");
         admin = msg.sender;
         quorum = initialQuorum;
         timelockSeconds = initialTimelockSeconds;
@@ -75,6 +76,7 @@ contract TARGovernance {
     }
 
     function setTimelock(uint256 value) external onlyAdmin {
+        require(value <= type(uint64).max - block.timestamp, "timelock overflow");
         timelockSeconds = value;
         emit TimelockSet(value);
     }
@@ -98,9 +100,15 @@ contract TARGovernance {
         require(votingPower[msg.sender] > 0, "no voting power");
         require(actionHash != bytes32(0), "empty action");
         require(votingPeriodSeconds >= 60, "voting too short");
+
+        uint256 endsAt = block.timestamp + uint256(votingPeriodSeconds);
+        require(endsAt <= type(uint64).max, "voting timestamp overflow");
+        uint256 executeAt = endsAt + timelockSeconds;
+        require(executeAt <= type(uint64).max, "execution timestamp overflow");
+
         id = ++proposalCount;
-        uint64 ends = uint64(block.timestamp + votingPeriodSeconds);
-        uint64 executeAfter = uint64(uint256(ends) + timelockSeconds);
+        uint64 ends = uint64(endsAt);
+        uint64 executeAfter = uint64(executeAt);
         proposals[id] = Proposal({
             proposer: msg.sender,
             actionHash: actionHash,
