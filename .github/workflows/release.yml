@@ -15,7 +15,79 @@ env:
   IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/the-akashic-record
 
 jobs:
+  validate:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: tar
+          POSTGRES_PASSWORD: tar_release_password
+          POSTGRES_DB: tar
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U tar -d tar"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      TAR_DATABASE_URL: postgresql+psycopg://tar:tar_release_password@localhost:5432/tar
+      TAR_AUTO_SCHEMA_BOOTSTRAP: "false"
+      TAR_ARTIFACT_DIR: /tmp/tar-release-artifacts
+      TAR_ENABLE_CODE_EXECUTION: "false"
+      TAR_REQUIRE_API_KEY: "false"
+      TAR_LLM_PROVIDER: echo
+      TAR_ENABLE_SEMANTIC_RETRIEVAL: "false"
+      TAR_AUTONOMY_TOOLS: recall
+      TAR_AUTONOMY_MAX_STEPS: "2"
+      TAR_NODE_CAPABILITIES: agent,research,text,image,video
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify tag matches source version
+        run: |
+          VERSION="$(tr -d '\r\n' < VERSION)"
+          test "${GITHUB_REF_NAME}" = "v${VERSION}"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: python -m pip install --upgrade pip
+      - run: pip install -r requirements.txt pytest
+      - run: python -m compileall -q backend scripts
+      - run: node --check frontend/app.js
+      - name: Verify migration chain
+        run: |
+          alembic upgrade head
+          alembic downgrade -1
+          alembic upgrade head
+          alembic check
+      - run: pytest -q
+      - name: Start API and worker
+        run: |
+          uvicorn backend.app.production:app --host 127.0.0.1 --port 8000 > /tmp/tar-release-api.log 2>&1 &
+          python -m backend.worker > /tmp/tar-release-worker.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8000/ready >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/tar-release-api.log
+          exit 1
+      - run: python scripts/smoke_test.py
+        env:
+          TAR_SMOKE_URL: http://127.0.0.1:8000
+          TAR_SMOKE_JOB_TIMEOUT: "30"
+      - name: Validate Compose configurations
+        run: |
+          cp .env.example .env
+          docker compose config >/dev/null
+          docker compose -f docker-compose.yml -f compose.websearch.yml config >/dev/null
+
   release:
+    needs: validate
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -51,4 +123,4 @@ jobs:
             Container: `${{ env.IMAGE_NAME }}`
             Digest: `${{ steps.build.outputs.digest }}`
 
-            Before production rollout, follow `docs/PRODUCTION_RUNBOOK.md`, apply migrations, validate `/ready`, and run `scripts/smoke_test.py` against the target environment.
+            The tagged source passed version consistency, source/frontend validation, PostgreSQL migration round-trip and drift checks, tests, Compose validation, and the live API/worker smoke gate before this image was published. Follow `docs/PRODUCTION_RUNBOOK.md` for environment-specific rollout.

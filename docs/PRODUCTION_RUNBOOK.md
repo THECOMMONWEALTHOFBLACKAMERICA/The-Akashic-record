@@ -2,37 +2,67 @@
 
 ## Purpose
 
-This runbook defines the minimum operational discipline for a production T.A.R. deployment. Production must use PostgreSQL, isolated workers for executable workloads, explicit secrets, health/readiness probes, durable artifact storage, and tested backups.
+This runbook defines the minimum operational discipline for a production T.A.R. deployment. Production uses PostgreSQL/Alembic as the schema authority, authenticated workspaces, separate administrative/worker trust boundaries, durable artifact storage, health/readiness probes, monitoring and tested backups.
 
 ## Required production configuration
 
-- `TAR_DATABASE_URL`: PostgreSQL DSN. Do not use SQLite for multi-node production.
-- `TAR_ADMIN_KEY`: long random administrative secret stored in a secret manager.
-- Workspace API keys: create them through the administrative API and require them for network-accessible deployments.
-- `TAR_ALLOWED_ORIGINS`: explicit HTTPS origins; never `*` for credentialed production traffic.
-- `TAR_ARTIFACT_DIR`: durable mounted storage or replace the artifact backend with object storage.
-- Provider credentials: configure only providers actually enabled.
-- `TAR_ENABLE_CODE_EXECUTION=false` on the API service. Executable workloads belong only on sandboxed worker infrastructure.
+Set `TAR_ENV=production`. The production application validates its configuration and refuses to start with several unsafe defaults.
+
+Required baseline:
+
+- `TAR_DATABASE_URL`: PostgreSQL DSN.
+- `TAR_AUTO_SCHEMA_BOOTSTRAP=false`.
+- `TAR_REQUIRE_API_KEY=true`.
+- `TAR_ADMIN_KEY`: strong secret stored in a secret manager.
+- `TAR_WORKER_KEY`: separate strong worker secret.
+- `TAR_ALLOWED_ORIGINS`: explicit HTTPS origins; never `*`.
+- `TAR_ENABLE_CODE_EXECUTION=false` on API hosts.
+- durable artifact storage. S3-compatible storage is preferred for independent/multi-host workers.
+- provider credentials only for capabilities actually enabled.
+
+Optional systems:
+
+- `TAR_SEARXNG_URL` for current-web research. The repository includes `compose.websearch.yml` for a localhost development SearXNG service.
+- semantic embedding model/settings for semantic reranking.
+- NARA/NCBI configuration for those archive APIs.
+- image/video/transcription provider configuration.
+- blockchain RPC/governance contract configuration.
+- public IPFS publication only when explicitly intended.
 
 ## Deployment sequence
 
-1. Provision PostgreSQL with encrypted storage and automated snapshots.
-2. Provision durable artifact/object storage.
-3. Create application and admin secrets in the platform secret manager.
-4. Run `alembic upgrade head` before starting application traffic.
-5. Deploy the API with code execution disabled.
-6. Wait for `/health`, then require `/ready` to succeed before routing traffic.
-7. Deploy workers separately with least-privilege credentials and explicit capability lists.
-8. Bootstrap the first workspace/API key through the admin interface.
-9. Configure optional archive/model/media providers and check `/v1/system/providers`.
-10. Run `python scripts/smoke_test.py` against the deployment.
-11. Enable external traffic only after smoke tests pass.
+1. Provision PostgreSQL with encryption, restricted networking and automated snapshots.
+2. Provision durable S3-compatible/object artifact storage if workers will run on different hosts.
+3. Create admin, worker, database and provider secrets in the platform secret manager.
+4. Set `TAR_ENV=production`, API authentication, HTTPS origins and code execution off.
+5. Run `alembic upgrade head` before application traffic.
+6. Deploy the API and require `/ready` before routing traffic.
+7. Deploy worker pools with least-privilege credentials and explicit capabilities.
+8. Create the first workspace/API key through the admin API.
+9. Configure optional model/archive/media/current-web providers.
+10. Inspect `/v1/system/providers`, `/v1/system/capabilities` and `/v1/system/storage`.
+11. Run `python scripts/smoke_test.py` against the target environment.
+12. Enable external traffic only after smoke validation succeeds.
 
-## Backup
+## Current-web service
 
-Back up both the database and artifact store. A database-only backup is incomplete because artifact rows reference external bytes.
+For a developer-owned SearXNG instance:
 
-### PostgreSQL
+```bash
+docker compose -f docker-compose.yml -f compose.websearch.yml up --build
+```
+
+The supplied override binds SearXNG to localhost. Replace the example SearXNG secret and apply normal ingress/security controls before a networked deployment.
+
+## Artifact storage
+
+A database-only backup is incomplete because artifact records reference external bytes.
+
+For horizontally distributed workers use the S3-compatible backend rather than a host-local artifact directory. The repository MinIO profile is for development/testing; production may use AWS S3 or a compatible private object store.
+
+Public IPFS is **not** private object storage. Do not publish sensitive material to public IPFS. Public publication is an explicit admin action and should remain disabled unless deliberately required.
+
+## PostgreSQL backup
 
 Example logical backup:
 
@@ -40,66 +70,72 @@ Example logical backup:
 pg_dump --format=custom --no-owner --file=tar.dump "$TAR_DATABASE_URL"
 ```
 
-Store the dump encrypted outside the primary environment. Keep daily backups and at least one longer-term retention tier.
-
-### Artifacts
-
-Snapshot or replicate the directory/object-store prefix configured for T.A.R. Preserve object keys exactly because database records reference artifact identifiers and hashes.
+Store backups encrypted outside the primary environment and maintain a tested retention policy.
 
 ## Restore drill
 
-A backup is not considered valid until restored.
-
 1. Create an isolated PostgreSQL instance.
-2. Restore `tar.dump` with `pg_restore`.
-3. Restore the artifact snapshot into an isolated artifact location.
-4. Point a disposable T.A.R. deployment at both restored resources.
-5. Verify `/ready`.
-6. Verify workspace authentication and audit-chain verification.
-7. Retrieve several historical artifacts and compare their SHA-256 values.
-8. Run hybrid recall against known ingested documents.
-9. Run the full smoke test.
-10. Record the recovery time and any manual repair required.
+2. Restore the database with `pg_restore`.
+3. Restore artifact/object storage into an isolated location/bucket.
+4. Point a disposable T.A.R. deployment at the restored resources.
+5. Run `alembic upgrade head` if required by the target version.
+6. Verify `/ready` and workspace authentication.
+7. Verify the audit chain.
+8. Retrieve historical artifacts and confirm SHA-256 integrity.
+9. Run hybrid recall against known ingested documents.
+10. Run the full smoke test, including library and bounded-agent paths.
+11. Record recovery time and manual steps.
 
-Perform this drill regularly and after schema/storage changes.
+A backup is not considered operationally valid until restored successfully.
 
 ## Incident response
 
-### Suspected API-key compromise
+### Workspace API-key compromise
 
-- Revoke/rotate the affected key.
-- Inspect workspace-scoped audit events.
-- Rotate provider credentials if exposed downstream.
-- Preserve logs and database snapshots for investigation.
+- revoke/rotate the affected credential;
+- inspect workspace audit events;
+- preserve relevant logs/snapshots;
+- rotate downstream provider credentials if exposure is possible.
 
-### Admin-key compromise
+### Administrative secret compromise
 
-Treat as critical. Rotate `TAR_ADMIN_KEY` immediately, restrict ingress to administrative routes, inspect workspace/key creation events and redeploy services with the new secret.
+Treat as critical. Rotate `TAR_ADMIN_KEY`, restrict administrative ingress, inspect workspace/API-key creation events and redeploy with the new secret.
 
-### Worker compromise
+### Worker secret/node compromise
 
-Remove the node from service, revoke its credentials, preserve the container/VM for investigation, inspect jobs leased to that node and requeue only jobs whose outputs cannot be trusted.
+Rotate `TAR_WORKER_KEY`, remove the affected node, preserve its environment for investigation, inspect leased jobs and discard outputs that cannot be trusted.
 
 ### Database outage
 
-Stop write traffic if consistency cannot be guaranteed. Restore service from the database platform or the latest verified backup. Do not silently fall back to a local SQLite database.
+Stop write traffic when consistency is uncertain. Recover PostgreSQL from platform failover or the latest verified backup. Never silently fall back to SQLite in production.
+
+### Artifact-store failure
+
+Stop workflows that create artifacts if durable persistence is unavailable. Do not claim successful artifact creation when metadata exists but object bytes cannot be verified.
 
 ## Monitoring
 
-Prometheus metrics are available at `/metrics` on the production application wrapper. The Compose `monitoring` profile supplies a local Prometheus configuration.
+Prometheus metrics are exposed at `/metrics` through the production application wrapper. The Compose `monitoring` profile includes a local Prometheus deployment.
 
 Alert on:
 
-- `/ready` failures
-- elevated 5xx rate or latency
-- authentication failures/spikes
-- job queue age and repeated retries
-- worker heartbeat loss
-- PostgreSQL connection exhaustion/storage pressure
-- artifact storage errors/capacity
-- provider latency/error rates
-- audit-chain verification failures
+- `/ready` failures;
+- elevated 5xx rate or latency;
+- authentication failures/spikes;
+- queue age/retry growth;
+- worker heartbeat loss;
+- PostgreSQL connection/storage pressure;
+- artifact storage errors/capacity;
+- external provider latency/error rates;
+- current-web/search-provider failures when that capability is advertised;
+- audit-chain verification failures.
 
 ## Release discipline
 
-Every production release should have a tagged commit, migration/build validation, live smoke test, rollback target, changelog and container digest. Tag pushes matching `v*` produce a GHCR image and provenance attestation through the release workflow. Never deploy directly from an unreviewed feature branch.
+The source-of-truth version is `VERSION` and must match `backend/app/version.py`.
+
+The release candidate checklist is [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md). CI validates source compilation, frontend syntax, PostgreSQL migration round-trip/drift, tests, live API+worker smoke paths, governance contracts, Compose configuration and container builds.
+
+Tag releases as `v<VERSION>`. The release workflow rejects mismatched tags and re-runs migration/tests/live smoke qualification before publishing the GHCR image and provenance attestation.
+
+Do not promote `1.0.0-rc.1` to stable `1.0.0` until the actual production environment has completed the environment-specific release checklist, including backup/restore and configured-provider validation.

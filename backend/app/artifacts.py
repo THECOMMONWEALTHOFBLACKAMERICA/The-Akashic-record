@@ -9,6 +9,7 @@ from pathlib import Path
 from sqlalchemy import DateTime, Integer, String, Text, select
 from sqlalchemy.orm import Mapped, Session, mapped_column
 
+from .bootstrap import schema_bootstrap_enabled
 from .memory import Base, engine
 from .schema import ensure_workspace_columns
 from .storage import configured_storage, read_artifact_uri
@@ -21,8 +22,6 @@ class ArtifactRecord(Base):
     workspace_id: Mapped[str] = mapped_column(String(64), index=True, default="default")
     name: Mapped[str] = mapped_column(String(1000))
     media_type: Mapped[str] = mapped_column(String(200), default="application/octet-stream")
-    # Historical name retained for schema compatibility. Values may be local paths
-    # or durable storage URIs such as s3://bucket/key.
     path: Mapped[str] = mapped_column(String(3000))
     sha256: Mapped[str] = mapped_column(String(64), index=True)
     size_bytes: Mapped[int] = mapped_column(Integer, default=0)
@@ -30,21 +29,16 @@ class ArtifactRecord(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
 
-Base.metadata.create_all(engine)
-ensure_workspace_columns(engine)
+if schema_bootstrap_enabled():
+    Base.metadata.create_all(engine)
+    ensure_workspace_columns(engine)
 
 
 def _safe_name(name: str, fallback: str) -> str:
     return "".join(c for c in Path(name).name if c.isalnum() or c in "._-") or fallback
 
 
-def save_artifact(
-    name: str,
-    data: bytes,
-    media_type: str,
-    metadata: dict | None = None,
-    workspace_id: str = "default",
-) -> dict:
+def save_artifact(name: str, data: bytes, media_type: str, metadata: dict | None = None, workspace_id: str = "default") -> dict:
     artifact_id = uuid.uuid4().hex
     safe = _safe_name(name, artifact_id)
     object_name = f"{artifact_id}-{safe}"
@@ -52,52 +46,24 @@ def save_artifact(
     storage = configured_storage()
     uri = storage.put(workspace_id, object_name, data, media_type)
     enriched_metadata = {"storage_backend": storage.name, **(metadata or {})}
-
     try:
         with Session(engine) as session:
-            session.add(
-                ArtifactRecord(
-                    artifact_id=artifact_id,
-                    workspace_id=workspace_id,
-                    name=safe,
-                    media_type=media_type,
-                    path=uri,
-                    sha256=digest,
-                    size_bytes=len(data),
-                    metadata_json=json.dumps(enriched_metadata, ensure_ascii=False),
-                )
-            )
+            session.add(ArtifactRecord(artifact_id=artifact_id, workspace_id=workspace_id, name=safe, media_type=media_type, path=uri, sha256=digest, size_bytes=len(data), metadata_json=json.dumps(enriched_metadata, ensure_ascii=False)))
             session.commit()
     except Exception:
-        # Avoid orphaning freshly written bytes when metadata persistence fails.
         try:
             storage.delete(uri)
         finally:
             raise
-
-    return {
-        "artifact_id": artifact_id,
-        "name": safe,
-        "media_type": media_type,
-        "sha256": digest,
-        "size_bytes": len(data),
-        "workspace_id": workspace_id,
-        "storage_backend": storage.name,
-    }
+    return {"artifact_id": artifact_id, "name": safe, "media_type": media_type, "sha256": digest, "size_bytes": len(data), "workspace_id": workspace_id, "storage_backend": storage.name}
 
 
 def get_artifact(artifact_id: str, workspace_id: str = "default") -> tuple[ArtifactRecord, bytes] | None:
     with Session(engine) as session:
-        row = session.scalar(
-            select(ArtifactRecord).where(
-                ArtifactRecord.artifact_id == artifact_id,
-                ArtifactRecord.workspace_id == workspace_id,
-            )
-        )
+        row = session.scalar(select(ArtifactRecord).where(ArtifactRecord.artifact_id == artifact_id, ArtifactRecord.workspace_id == workspace_id))
         if not row:
             return None
         session.expunge(row)
-
     data = read_artifact_uri(row.path)
     if data is None:
         return None
@@ -108,21 +74,5 @@ def get_artifact(artifact_id: str, workspace_id: str = "default") -> tuple[Artif
 
 def list_artifacts(limit: int = 100, workspace_id: str = "default") -> list[dict]:
     with Session(engine) as session:
-        rows = session.scalars(
-            select(ArtifactRecord)
-            .where(ArtifactRecord.workspace_id == workspace_id)
-            .order_by(ArtifactRecord.created_at.desc())
-            .limit(limit)
-        ).all()
-    return [
-        {
-            "artifact_id": r.artifact_id,
-            "name": r.name,
-            "media_type": r.media_type,
-            "sha256": r.sha256,
-            "size_bytes": r.size_bytes,
-            "storage_backend": json.loads(r.metadata_json or "{}").get("storage_backend", "legacy-local"),
-            "created_at": r.created_at.isoformat() if r.created_at else None,
-        }
-        for r in rows
-    ]
+        rows = session.scalars(select(ArtifactRecord).where(ArtifactRecord.workspace_id == workspace_id).order_by(ArtifactRecord.created_at.desc()).limit(limit)).all()
+    return [{"artifact_id": r.artifact_id, "name": r.name, "media_type": r.media_type, "sha256": r.sha256, "size_bytes": r.size_bytes, "storage_backend": json.loads(r.metadata_json or "{}").get("storage_backend", "legacy-local"), "created_at": r.created_at.isoformat() if r.created_at else None} for r in rows]

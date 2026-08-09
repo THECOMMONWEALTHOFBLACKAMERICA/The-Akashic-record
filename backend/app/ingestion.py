@@ -11,6 +11,7 @@ import fitz
 from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, select
 from sqlalchemy.orm import Mapped, Session, mapped_column
 
+from .bootstrap import schema_bootstrap_enabled
 from .document_tools import docx_to_text, pptx_to_text, xlsx_to_text
 from .epub import parse_epub
 from .memory import Base, engine
@@ -58,8 +59,9 @@ class IngestJob(Base):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
-Base.metadata.create_all(engine)
-ensure_workspace_columns(engine)
+if schema_bootstrap_enabled():
+    Base.metadata.create_all(engine)
+    ensure_workspace_columns(engine)
 
 
 def _sha256(data: bytes) -> str:
@@ -157,10 +159,11 @@ def ingest_bytes(filename: str, data: bytes, *, title: str | None = None, source
     except Exception as exc:
         with Session(engine) as session:
             job = session.get(IngestJob, job_id)
-            job.status = "failed"
-            job.error = str(exc)
-            job.finished_at = datetime.now(timezone.utc)
-            session.commit()
+            if job:
+                job.status = "failed"
+                job.error = str(exc)
+                job.finished_at = datetime.now(timezone.utc)
+                session.commit()
         raise
 
 

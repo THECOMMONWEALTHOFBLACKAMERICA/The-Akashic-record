@@ -23,7 +23,6 @@ def upgrade() -> None:
         sa.Column("manifest_cid", sa.String(length=200), nullable=False),
         sa.Column("sha256", sa.String(length=64), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.UniqueConstraint("publication_id"),
     )
     op.create_index("ix_artifact_publications_publication_id", "artifact_publications", ["publication_id"], unique=True)
     op.create_index("ix_artifact_publications_workspace_id", "artifact_publications", ["workspace_id"])

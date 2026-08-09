@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.0.0-rc.1
+
+### Final qualification
+- production configuration now fails closed for unsafe production defaults
+- PostgreSQL/Alembic is authoritative in production; remaining import-time schema creation and default-workspace mutation are suppressed during migration discovery
+- migration CI validates upgrade, one-step downgrade, re-upgrade and ORM/schema drift
+- live smoke testing now covers ingestion, recall, research-library state, bounded agent persistence, PDF artifact integrity, audit verification and distributed jobs
+- default worker capabilities now include bounded agent jobs
+- current-web SearXNG deployment is packaged as a local Compose override
+- operator console exposes bounded agents, EPUB/library workflows, capability state and agent jobs
+- CI validates frontend JavaScript and Docker Compose configurations in addition to Python, governance contracts and container builds
+- tagged release workflow is gated by version/tag consistency, PostgreSQL migrations, tests and live API/worker smoke validation before GHCR publication
+- added explicit 1.0 release checklist separating code qualification from production infrastructure/provider qualification
+- root README brought current with semantic retrieval, EPUB, live web, S3/MinIO, IPFS provenance, bounded autonomy and production requirements
+
 ## 0.18.0-rc.1
 
 ### Bounded autonomous runtime
