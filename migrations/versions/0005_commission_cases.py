@@ -1,4 +1,4 @@
-"""Add Foundational Citizenship Commission case/evidence records.
+"""Add Foundational Citizenship Commission case/evidence/access records.
 
 Revision ID: 0005_commission_cases
 Revises: 0004_autonomous_agent_runs
@@ -65,8 +65,26 @@ def upgrade() -> None:
     op.create_index("ix_commission_evidence_status", "commission_evidence", ["status"])
     op.create_index("ix_commission_evidence_original_sha256", "commission_evidence", ["original_sha256"])
 
+    op.create_table(
+        "commission_case_access",
+        sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
+        sa.Column("case_id", sa.String(length=64), nullable=False),
+        sa.Column("workspace_id", sa.String(length=64), nullable=False),
+        sa.Column("key_id", sa.String(length=64), nullable=False),
+        sa.Column("role", sa.String(length=40), nullable=False, server_default="readonly"),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+        sa.UniqueConstraint("case_id", "key_id", name="uq_commission_case_key"),
+    )
+    op.create_index("ix_commission_case_access_case_id", "commission_case_access", ["case_id"])
+    op.create_index("ix_commission_case_access_workspace_id", "commission_case_access", ["workspace_id"])
+    op.create_index("ix_commission_case_access_key_id", "commission_case_access", ["key_id"])
+
 
 def downgrade() -> None:
+    op.drop_index("ix_commission_case_access_key_id", table_name="commission_case_access")
+    op.drop_index("ix_commission_case_access_workspace_id", table_name="commission_case_access")
+    op.drop_index("ix_commission_case_access_case_id", table_name="commission_case_access")
+    op.drop_table("commission_case_access")
     op.drop_index("ix_commission_evidence_original_sha256", table_name="commission_evidence")
     op.drop_index("ix_commission_evidence_status", table_name="commission_evidence")
     op.drop_index("ix_commission_evidence_workspace_id", table_name="commission_evidence")
