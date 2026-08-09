@@ -1,6 +1,6 @@
 import pytest
 
-from backend.app.artifacts import save_artifact
+from backend.app.artifacts import delete_artifact, save_artifact
 from backend.app.publications import publish_artifact
 
 
@@ -12,5 +12,8 @@ def test_commission_original_artifact_cannot_publish_to_ipfs():
         {"classification": "commission_original_evidence", "public_ipfs_allowed": False},
         "default",
     )
-    with pytest.raises(PermissionError):
-        publish_artifact(artifact["artifact_id"], "default")
+    try:
+        with pytest.raises(PermissionError):
+            publish_artifact(artifact["artifact_id"], "default")
+    finally:
+        delete_artifact(artifact["artifact_id"], "default")
