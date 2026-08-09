@@ -26,11 +26,15 @@ jobs:
           --health-retries=10
     env:
       TAR_DATABASE_URL: postgresql+psycopg://tar:tar_ci_password@localhost:5432/tar
+      TAR_AUTO_SCHEMA_BOOTSTRAP: "false"
       TAR_ARTIFACT_DIR: /tmp/tar-artifacts
       TAR_ENABLE_CODE_EXECUTION: "false"
       TAR_REQUIRE_API_KEY: "false"
       TAR_LLM_PROVIDER: echo
       TAR_ENABLE_SEMANTIC_RETRIEVAL: "false"
+      TAR_AUTONOMY_TOOLS: recall
+      TAR_AUTONOMY_MAX_STEPS: "2"
+      TAR_NODE_CAPABILITIES: agent,research,text,image,video
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -41,6 +45,7 @@ jobs:
       - run: pip install -r requirements.txt pytest
       - run: python -m compileall -q backend scripts
       - run: alembic upgrade head
+      - run: alembic check
       - run: pytest -q
       - name: Start API and worker
         run: |
@@ -74,7 +79,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - run: npm install
+          cache: npm
+          cache-dependency-path: contracts/package-lock.json
+      - run: npm ci
       - run: npm test
 
   docker-build:
