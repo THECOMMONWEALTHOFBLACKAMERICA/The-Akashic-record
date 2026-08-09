@@ -1,19 +1,28 @@
 from __future__ import annotations
 
+import os
 from logging.config import fileConfig
 
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
-from backend.app.settings import settings
-from backend.app.memory import Base
+# Model modules historically performed development schema bootstrapping at import
+# time. Alembic must discover mappings without mutating the database first.
+os.environ["TAR_MIGRATION_CONTEXT"] = "1"
 
-# Import modules so every mapped table is registered on Base.metadata.
-from backend.app import artifacts as _artifacts  # noqa: F401,E402
-from backend.app import control as _control  # noqa: F401,E402
-from backend.app import ingestion as _ingestion  # noqa: F401,E402
-from backend.app import jobs as _jobs  # noqa: F401,E402
-from backend.app import publications as _publications  # noqa: F401,E402
+from backend.app.settings import settings  # noqa: E402
+from backend.app.memory import Base  # noqa: E402
+
+_original_create_all = Base.metadata.create_all
+Base.metadata.create_all = lambda *args, **kwargs: None  # type: ignore[method-assign]
+try:
+    from backend.app import artifacts as _artifacts  # noqa: F401,E402
+    from backend.app import control as _control  # noqa: F401,E402
+    from backend.app import ingestion as _ingestion  # noqa: F401,E402
+    from backend.app import jobs as _jobs  # noqa: F401,E402
+    from backend.app import publications as _publications  # noqa: F401,E402
+finally:
+    Base.metadata.create_all = _original_create_all  # type: ignore[method-assign]
 
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.database_url)
