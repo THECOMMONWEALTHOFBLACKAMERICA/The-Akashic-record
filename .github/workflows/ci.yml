@@ -8,7 +8,7 @@ permissions:
   contents: read
 
 jobs:
-  python:
+  integration:
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -28,6 +28,8 @@ jobs:
       TAR_DATABASE_URL: postgresql+psycopg://tar:tar_ci_password@localhost:5432/tar
       TAR_ARTIFACT_DIR: /tmp/tar-artifacts
       TAR_ENABLE_CODE_EXECUTION: "false"
+      TAR_REQUIRE_API_KEY: "false"
+      TAR_LLM_PROVIDER: echo
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -36,8 +38,30 @@ jobs:
           cache: pip
       - run: python -m pip install --upgrade pip
       - run: pip install -r requirements.txt pytest
-      - run: python -m compileall -q backend
+      - run: python -m compileall -q backend scripts
+      - run: alembic upgrade head
       - run: pytest -q
+      - name: Start API and worker
+        run: |
+          uvicorn backend.app.production:app --host 127.0.0.1 --port 8000 > /tmp/tar-api.log 2>&1 &
+          echo $! > /tmp/tar-api.pid
+          python -m backend.worker > /tmp/tar-worker.log 2>&1 &
+          echo $! > /tmp/tar-worker.pid
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8000/ready >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/tar-api.log
+          exit 1
+      - run: python scripts/smoke_test.py
+        env:
+          TAR_SMOKE_URL: http://127.0.0.1:8000
+          TAR_SMOKE_JOB_TIMEOUT: "30"
+      - name: Dump service logs on failure
+        if: failure()
+        run: |
+          cat /tmp/tar-api.log || true
+          cat /tmp/tar-worker.log || true
 
   docker-build:
     runs-on: ubuntu-latest
@@ -47,6 +71,7 @@ jobs:
       - uses: docker/build-push-action@v6
         with:
           context: .
+          file: backend/Dockerfile
           push: false
           tags: tar-ci:latest
           cache-from: type=gha
