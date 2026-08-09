@@ -123,11 +123,13 @@ def audit(action: str, object_type: str = "", object_id: str = "", payload: dict
     return {"event_id": event_id, "event_hash": event_hash, "prev_hash": prev_hash}
 
 
-def audit_tail(limit: int = 100, workspace_id: str | None = None) -> list[dict]:
+def audit_tail(limit: int = 100, workspace_id: str | None = None, *, include_commission: bool = False) -> list[dict]:
     with Session(engine) as session:
         stmt = select(AuditEvent)
         if workspace_id:
             stmt = stmt.where(AuditEvent.workspace_id == workspace_id)
+        if not include_commission:
+            stmt = stmt.where(~AuditEvent.action.like("commission.%"))
         rows = session.scalars(stmt.order_by(AuditEvent.id.desc()).limit(limit)).all()
     return [{"event_id": r.event_id, "workspace_id": r.workspace_id, "actor": r.actor, "action": r.action, "object_type": r.object_type, "object_id": r.object_id, "payload": json.loads(r.payload_json or "{}").get("payload", {}), "prev_hash": r.prev_hash, "event_hash": r.event_hash, "created_at": r.created_at.isoformat() if r.created_at else None} for r in rows]
 
