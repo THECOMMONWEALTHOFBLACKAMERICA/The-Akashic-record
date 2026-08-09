@@ -3,13 +3,12 @@ from __future__ import annotations
 import asyncio
 import os
 import re
-import xml.etree.ElementTree as ET
 
 import httpx
 
 from .settings import settings
 
-HEADERS = {"User-Agent": "TAR-Akashic-Records/0.9 research client; contact configured by operator"}
+HEADERS = {"User-Agent": "TAR-Akashic-Records/1.0 research client; contact configured by operator"}
 _TAGS = re.compile(r"<[^>]+>")
 
 
@@ -21,21 +20,14 @@ async def _json(url: str, params: dict, headers: dict | None = None):
         return r.json()
 
 
-async def _text(url: str, params: dict):
-    async with httpx.AsyncClient(timeout=settings.request_timeout, headers=HEADERS, follow_redirects=True) as client:
-        r = await client.get(url, params=params)
-        r.raise_for_status()
-        return r.text
-
-
 async def wikipedia(q: str, limit: int = 5):
     data = await _json("https://en.wikipedia.org/w/api.php", {"action": "query", "list": "search", "srsearch": q, "format": "json", "utf8": 1, "srlimit": limit})
-    return [{"source": "wikipedia", "title": x["title"], "url": f"https://en.wikipedia.org/wiki/{x['title'].replace(' ', '_')}", "snippet": x.get("snippet", ""), "confidence": 0.55} for x in data.get("query", {}).get("search", [])]
+    return [{"source": "wikipedia", "title": x["title"], "url": f"https://en.wikipedia.org/wiki/{x['title'].replace(' ', '_')}", "snippet": x.get("snippet", ""), "confidence": 0.55, "provenance": {"retrieved_via": "MediaWiki API"}} for x in data.get("query", {}).get("search", [])]
 
 
 async def wikidata(q: str, limit: int = 5):
     data = await _json("https://www.wikidata.org/w/api.php", {"action": "wbsearchentities", "search": q, "language": "en", "format": "json", "limit": limit})
-    return [{"source": "wikidata", "title": x.get("label", x["id"]), "url": f"https://www.wikidata.org/wiki/{x['id']}", "snippet": x.get("description", ""), "confidence": 0.65} for x in data.get("search", [])]
+    return [{"source": "wikidata", "title": x.get("label", x["id"]), "url": f"https://www.wikidata.org/wiki/{x['id']}", "snippet": x.get("description", ""), "confidence": 0.65, "provenance": {"retrieved_via": "Wikidata API"}} for x in data.get("search", [])]
 
 
 async def loc(q: str, limit: int = 5):
@@ -95,8 +87,32 @@ async def pubmed(q: str, limit: int = 5):
     return out
 
 
+async def web(q: str, limit: int = 5):
+    """Query an operator-controlled SearXNG instance for current web evidence."""
+    base = os.getenv("TAR_SEARXNG_URL", "").strip().rstrip("/")
+    if not base:
+        return []
+    params = {"q": q, "format": "json", "language": os.getenv("TAR_SEARXNG_LANGUAGE", "all"), "safesearch": int(os.getenv("TAR_SEARXNG_SAFESEARCH", "1"))}
+    data = await _json(f"{base}/search", params)
+    out = []
+    for x in data.get("results", [])[:limit]:
+        url = str(x.get("url", ""))
+        if not url.startswith(("http://", "https://")):
+            continue
+        out.append({
+            "source": "web",
+            "title": str(x.get("title") or url),
+            "url": url,
+            "snippet": str(x.get("content") or ""),
+            "date": x.get("publishedDate") or x.get("published_date"),
+            "confidence": 0.55,
+            "provenance": {"api": "SearXNG", "engine": x.get("engine"), "engines": x.get("engines")},
+        })
+    return out
+
+
 async def dawes(q: str, limit: int = 5):
-    query = f'("Dawes" OR "Final Rolls" OR "Five Civilized Tribes") {q}'.strip()
+    query = f'(Dawes OR "Final Rolls" OR "Five Civilized Tribes") {q}'.strip()
     nara_hits, loc_hits = await asyncio.gather(nara(query, limit), loc(query, limit), return_exceptions=False)
     return [{**x, "source": "dawes_rolls_research"} for x in (nara_hits + loc_hits)[:limit]]
 
@@ -113,13 +129,15 @@ CONNECTORS = {
     "loc": loc,
     "nara": nara,
     "pubmed": pubmed,
+    "web": web,
     "dawes": dawes,
     "freedmen": freedmen,
 }
 
 
 async def search_all(query: str, sources: list[str] | None = None, limit: int = 5):
-    names = sources or ["wikipedia", "wikidata", "loc", "nara", "pubmed"]
+    defaults = ["web", "wikipedia", "wikidata", "loc", "nara", "pubmed"] if os.getenv("TAR_SEARXNG_URL", "").strip() else ["wikipedia", "wikidata", "loc", "nara", "pubmed"]
+    names = sources or defaults
     jobs = [CONNECTORS[n](query, limit) for n in names if n in CONNECTORS]
     groups = await asyncio.gather(*jobs, return_exceptions=True)
     results = []
