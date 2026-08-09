@@ -4,15 +4,15 @@ import asyncio
 import os
 import socket
 
-from app.agent_router import execute_task
-from app.control import heartbeat_node, register_node
-from app.jobs import claim, complete, fail
+from backend.app.agent_router import execute_task
+from backend.app.control import heartbeat_node, register_node
+from backend.app.jobs import claim, complete, fail
 
 
 async def main():
     name = os.getenv("TAR_NODE_NAME", socket.gethostname())
     endpoint = os.getenv("TAR_NODE_ENDPOINT", "")
-    capabilities = [x.strip() for x in os.getenv("TAR_NODE_CAPABILITIES", "research,text,image,video,code").split(",") if x.strip()]
+    capabilities = [x.strip() for x in os.getenv("TAR_NODE_CAPABILITIES", "research,text,image,video").split(",") if x.strip()]
     poll_seconds = float(os.getenv("TAR_WORKER_POLL_SECONDS", "2"))
     node = register_node(name, endpoint, capabilities)
     node_id = node["node_id"]
