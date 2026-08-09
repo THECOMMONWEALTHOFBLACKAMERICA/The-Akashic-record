@@ -6,6 +6,7 @@ from typing import Iterable
 from sqlalchemy import DateTime, Float, Integer, String, Text, create_engine, select
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
+from .bootstrap import schema_bootstrap_enabled
 from .settings import settings
 
 
@@ -27,9 +28,10 @@ class MemoryRecord(Base):
 
 
 engine = create_engine(settings.database_url, future=True, pool_pre_ping=True)
-Base.metadata.create_all(engine)
-from .schema import ensure_workspace_columns
-ensure_workspace_columns(engine)
+if schema_bootstrap_enabled():
+    Base.metadata.create_all(engine)
+    from .schema import ensure_workspace_columns
+    ensure_workspace_columns(engine)
 
 
 def _tokens(text: str) -> set[str]:
