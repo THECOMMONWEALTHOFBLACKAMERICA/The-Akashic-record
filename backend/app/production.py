@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from .autonomy_api import router as autonomy_router
 from .library_api import router as library_router
 from .main import app
 from .observability import metrics_middleware, router as metrics_router
@@ -12,3 +13,4 @@ app.include_router(metrics_router)
 app.include_router(operations_router)
 app.include_router(publication_router)
 app.include_router(library_router)
+app.include_router(autonomy_router)
