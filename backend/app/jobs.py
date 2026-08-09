@@ -4,7 +4,7 @@ import json
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import DateTime, Integer, String, Text, select, update
+from sqlalchemy import DateTime, Integer, String, Text, select
 from sqlalchemy.orm import Mapped, Session, mapped_column
 
 from .memory import Base, engine
@@ -46,18 +46,41 @@ def get_job(job_id: str) -> dict | None:
         return _serialize(row)
 
 
+def _expired(row: TaskJob, now: datetime) -> bool:
+    if row.status != "running":
+        return False
+    if row.lease_until is None:
+        return True
+    lease = row.lease_until
+    if lease.tzinfo is None:
+        lease = lease.replace(tzinfo=timezone.utc)
+    return lease < now
+
+
 def claim(node_id: str, capabilities: list[str] | None = None, lease_seconds: int = 120) -> dict | None:
+    """Atomically lease one compatible job.
+
+    PostgreSQL uses FOR UPDATE SKIP LOCKED so concurrent workers cannot lease the
+    same row. SQLAlchemy omits unsupported locking syntax for SQLite development.
+    """
     now = datetime.now(timezone.utc)
     with Session(engine) as session:
-        rows = session.scalars(select(TaskJob).where(TaskJob.status.in_(["queued", "running"])).order_by(TaskJob.created_at.asc()).limit(100)).all()
+        stmt = (
+            select(TaskJob)
+            .where(TaskJob.status.in_(["queued", "running"]))
+            .order_by(TaskJob.created_at.asc())
+            .limit(100)
+            .with_for_update(skip_locked=True)
+        )
+        rows = session.scalars(stmt).all()
         candidate = None
         for row in rows:
-            expired = row.status == "running" and (row.lease_until is None or row.lease_until < now)
             eligible = not capabilities or row.kind in capabilities or "*" in capabilities
-            if eligible and (row.status == "queued" or expired):
+            if eligible and (row.status == "queued" or _expired(row, now)):
                 candidate = row
                 break
         if not candidate:
+            session.rollback()
             return None
         candidate.status = "running"
         candidate.assigned_node = node_id
@@ -91,7 +114,7 @@ def fail(job_id: str, node_id: str, error: str, retry: bool = True, max_attempts
             raise KeyError(job_id)
         if row.assigned_node and row.assigned_node != node_id:
             raise PermissionError("job assigned to another node")
-        row.error = error[-20000:]
+        row.error = error[-20_000:]
         row.status = "queued" if retry and row.attempts < max_attempts else "failed"
         row.assigned_node = ""
         row.lease_until = None
