@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import uuid
 from datetime import datetime, timezone
 
@@ -37,6 +38,9 @@ def publish_artifact(artifact_id: str, workspace_id: str) -> dict:
     if not found:
         raise KeyError("artifact not found")
     row, data = found
+    metadata = json.loads(row.metadata_json or "{}")
+    if metadata.get("classification") == "commission_original_evidence" or metadata.get("public_ipfs_allowed") is False:
+        raise PermissionError("artifact is classified as protected Commission evidence and cannot be published to public IPFS")
     artifact_ipfs = add_bytes(data, row.name, row.media_type)
     manifest = manifest_for_artifact(artifact_id=row.artifact_id, workspace_id=row.workspace_id, name=row.name, media_type=row.media_type, sha256=row.sha256, size_bytes=row.size_bytes, artifact_cid=artifact_ipfs["cid"], version=VERSION)
     manifest_ipfs = publish_manifest(manifest)
