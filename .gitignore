@@ -15,3 +15,6 @@ coverage/
 data/private/
 data/index/
 artifacts/
+contracts/cache/
+contracts/artifacts/
+contracts/node_modules/
