@@ -92,7 +92,7 @@ def verify_api_key(raw: str) -> dict | None:
         return None
     with Session(engine) as session:
         row = session.scalar(select(ApiKey).where(ApiKey.key_hash == _hash_key(raw), ApiKey.active.is_(True)))
-        return {"workspace_id": row.workspace_id, "label": row.label} if row else None
+        return {"workspace_id": row.workspace_id, "label": row.label, "key_id": str(row.id)} if row else None
 
 
 def create_workspace(name: str, owner: str = "local") -> dict:
