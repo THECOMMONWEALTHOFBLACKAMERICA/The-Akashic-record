@@ -3,6 +3,7 @@ from __future__ import annotations
 from .artifacts import delete_artifact
 from .commission import delete_case, export_case
 from .commission_access import list_case_access, revoke_case_access
+from .control import audit
 
 
 def _artifact_ids(evidence: list[dict]) -> set[str]:
@@ -23,14 +24,6 @@ def _artifact_ids(evidence: list[dict]) -> set[str]:
 
 
 def delete_case_with_retention(case_id: str, workspace_id: str, *, actor: str, policy_basis: str) -> dict:
-    """Delete a case under policy while preserving an auditable result.
-
-    Legal-hold enforcement occurs inside delete_case before any case rows are
-    removed. Artifact references are collected first; bytes/metadata are then
-    removed after the case transaction succeeds. Any artifact deletion failure
-    is returned explicitly so operators can remediate rather than silently
-    claiming a complete deletion.
-    """
     exported = export_case(case_id, workspace_id)
     artifact_ids = _artifact_ids(exported.get("evidence") or [])
     access_rows = list_case_access(case_id, workspace_id)
@@ -52,7 +45,7 @@ def delete_case_with_retention(case_id: str, workspace_id: str, *, actor: str, p
         if key_id and revoke_case_access(case_id, workspace_id, key_id):
             revoked_keys.append(key_id)
 
-    return {
+    cleanup = {
         **result,
         "artifact_records_targeted": len(artifact_ids),
         "artifacts_deleted": deleted_artifacts,
@@ -60,3 +53,20 @@ def delete_case_with_retention(case_id: str, workspace_id: str, *, actor: str, p
         "access_grants_revoked": len(revoked_keys),
         "complete": not artifact_failures,
     }
+    audit(
+        "commission.retention_cleanup",
+        "commission_case",
+        case_id,
+        {
+            "case_id": case_id,
+            "policy_basis": policy_basis,
+            "artifact_records_targeted": len(artifact_ids),
+            "artifacts_deleted": len(deleted_artifacts),
+            "artifact_deletion_failures": artifact_failures,
+            "access_grants_revoked": len(revoked_keys),
+            "complete": cleanup["complete"],
+        },
+        workspace_id=workspace_id,
+        actor=actor,
+    )
+    return cleanup
