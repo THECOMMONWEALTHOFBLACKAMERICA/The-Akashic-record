@@ -7,6 +7,7 @@ from .agent_router import execute_task
 from .artifacts import get_artifact, list_artifacts
 from .auth import require_identity
 from .control import audit, audit_tail, create_api_key, create_workspace, heartbeat_node, list_nodes, register_node
+from .governance import proposal as governance_proposal, status as governance_status
 from .ingestion import get_job, ingest_bytes, list_documents
 from .memory import remember, stats
 from .orchestrator import answer
@@ -61,7 +62,7 @@ class NodeRequest(BaseModel):
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "service": "tar-api", "version": "0.5.0", "memory": stats()}
+    return {"status": "ok", "service": "tar-api", "version": "0.5.0", "memory": stats(), "governance": governance_status()}
 
 
 @app.post("/v1/ask")
@@ -204,3 +205,16 @@ def node_heartbeat(node_id: str, identity: dict = Depends(require_identity)):
 @app.get("/v1/nodes")
 def nodes(identity: dict = Depends(require_identity)):
     return {"nodes": list_nodes()}
+
+
+@app.get("/v1/governance")
+def governance(identity: dict = Depends(require_identity)):
+    return governance_status()
+
+
+@app.get("/v1/governance/proposals/{proposal_id}")
+def governance_get_proposal(proposal_id: int, identity: dict = Depends(require_identity)):
+    try:
+        return governance_proposal(proposal_id)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
