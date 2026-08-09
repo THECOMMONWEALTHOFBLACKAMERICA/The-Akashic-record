@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
+from .artifacts import save_artifact
 from .auth import require_identity
 from .commission import add_evidence, create_case, delete_case, export_case, list_cases, list_evidence, review_evidence, update_case
+from .commission_research import research_case
 
 router = APIRouter(prefix="/v1/commission", tags=["commission"])
 
@@ -19,6 +21,14 @@ class CaseUpdate(BaseModel):
     restricted_research: bool | None = None
     legal_hold: bool | None = None
     retention_policy: str | None = Field(default=None, max_length=200)
+
+
+class CaseResearch(BaseModel):
+    query: str = Field(min_length=1, max_length=2000)
+    include_dawes: bool = False
+    broaden_web: bool = False
+    persist_as_evidence: bool = True
+    limit: int = Field(default=5, ge=1, le=25)
 
 
 class EvidenceCreate(BaseModel):
@@ -65,6 +75,14 @@ def patch_case(case_id: str, req: CaseUpdate, identity: dict = Depends(require_i
         raise HTTPException(status_code=400 if isinstance(exc, ValueError) else 404, detail=str(exc)) from exc
 
 
+@router.post("/cases/{case_id}/research")
+async def case_research(case_id: str, req: CaseResearch, identity: dict = Depends(require_identity)):
+    try:
+        return await research_case(case_id, identity["workspace_id"], req.query, include_dawes=req.include_dawes, broaden_web=req.broaden_web, persist_as_evidence=req.persist_as_evidence, actor=identity["label"], limit=req.limit)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
 @router.get("/cases/{case_id}/export")
 def case_export(case_id: str, identity: dict = Depends(require_identity)):
     try:
@@ -87,6 +105,53 @@ def remove_case(case_id: str, req: CaseDelete, identity: dict = Depends(require_
 def new_evidence(case_id: str, req: EvidenceCreate, identity: dict = Depends(require_identity)):
     try:
         return add_evidence(case_id, identity["workspace_id"], title=req.title, source_tier=req.source_tier, source=req.source, source_uri=req.source_uri, citation=req.citation, retrieval_metadata=req.retrieval_metadata, original_filename=req.original_filename, original_sha256=req.original_sha256, uploader=req.uploader or identity["label"], claimed_provenance=req.claimed_provenance, media_type=req.media_type, transformations=req.transformations, derived_artifacts=req.derived_artifacts, actor=identity["label"])
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/cases/{case_id}/evidence/upload")
+async def upload_evidence(
+    case_id: str,
+    file: UploadFile = File(...),
+    title: str = Form(default=""),
+    source_tier: int = Form(default=1),
+    source: str = Form(default="applicant_submission"),
+    claimed_provenance: str = Form(default=""),
+    citation: str = Form(default=""),
+    identity: dict = Depends(require_identity),
+):
+    data = await file.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="Empty file")
+    if len(data) > 100 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="File exceeds 100 MB Commission upload limit")
+    try:
+        original = save_artifact(
+            file.filename or "evidence.bin",
+            data,
+            file.content_type or "application/octet-stream",
+            {"classification": "commission_original_evidence", "case_id": case_id, "public_ipfs_allowed": False},
+            identity["workspace_id"],
+        )
+        return add_evidence(
+            case_id,
+            identity["workspace_id"],
+            title=title or file.filename or "Submitted evidence",
+            source_tier=source_tier,
+            source=source,
+            citation=citation,
+            retrieval_metadata={"original_artifact_id": original["artifact_id"], "storage_backend": original.get("storage_backend")},
+            original_filename=file.filename or "evidence.bin",
+            original_bytes=data,
+            uploader=identity["label"],
+            claimed_provenance=claimed_provenance,
+            media_type=file.content_type or "application/octet-stream",
+            transformations=[],
+            derived_artifacts=[],
+            actor=identity["label"],
+        )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
