@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import json
-
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
@@ -24,21 +22,21 @@ class SpreadsheetRequest(BaseModel):
 
 @router.post("/pdf")
 def make_pdf(req: TextDocumentRequest, identity: dict = Depends(require_identity)):
-    artifact = create_pdf(req.title, req.text)
+    artifact = create_pdf(req.title, req.text, identity["workspace_id"])
     audit("document.pdf_created", "artifact", artifact["artifact_id"], {"title": req.title}, workspace_id=identity["workspace_id"], actor=identity["label"])
     return artifact
 
 
 @router.post("/docx")
 def make_docx(req: TextDocumentRequest, identity: dict = Depends(require_identity)):
-    artifact = create_docx(req.title, req.text)
+    artifact = create_docx(req.title, req.text, identity["workspace_id"])
     audit("document.docx_created", "artifact", artifact["artifact_id"], {"title": req.title}, workspace_id=identity["workspace_id"], actor=identity["label"])
     return artifact
 
 
 @router.post("/xlsx")
 def make_xlsx(req: SpreadsheetRequest, identity: dict = Depends(require_identity)):
-    artifact = create_xlsx(req.rows, req.name)
+    artifact = create_xlsx(req.rows, req.name, identity["workspace_id"])
     audit("document.xlsx_created", "artifact", artifact["artifact_id"], {"rows": len(req.rows)}, workspace_id=identity["workspace_id"], actor=identity["label"])
     return artifact
 
@@ -47,23 +45,20 @@ def make_xlsx(req: SpreadsheetRequest, identity: dict = Depends(require_identity
 async def pdf_merge(files: list[UploadFile] = File(...), identity: dict = Depends(require_identity)):
     if len(files) < 2 or len(files) > 25:
         raise HTTPException(status_code=400, detail="Provide between 2 and 25 PDFs")
-    payloads = []
+    payloads=[]
     for file in files:
-        data = await file.read()
-        if not data.startswith(b"%PDF"):
-            raise HTTPException(status_code=400, detail=f"{file.filename} is not a PDF")
+        data=await file.read()
+        if not data.startswith(b"%PDF"):raise HTTPException(status_code=400, detail=f"{file.filename} is not a PDF")
         payloads.append(data)
-    artifact = merge_pdfs(payloads)
+    artifact=merge_pdfs(payloads, workspace_id=identity["workspace_id"])
     audit("document.pdf_merged", "artifact", artifact["artifact_id"], {"files": len(payloads)}, workspace_id=identity["workspace_id"], actor=identity["label"])
     return artifact
 
 
 @router.post("/pdf/annotate")
 async def pdf_annotate(file: UploadFile = File(...), page: int = Form(...), text: str = Form(...), x: float = Form(default=50), y: float = Form(default=50), identity: dict = Depends(require_identity)):
-    data = await file.read()
-    try:
-        artifact = annotate_pdf(data, page, text, x, y)
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    data=await file.read()
+    try:artifact=annotate_pdf(data,page,text,x,y,identity["workspace_id"])
+    except Exception as exc:raise HTTPException(status_code=400,detail=str(exc)) from exc
     audit("document.pdf_annotated", "artifact", artifact["artifact_id"], {"page": page, "filename": file.filename}, workspace_id=identity["workspace_id"], actor=identity["label"])
     return artifact
