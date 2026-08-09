@@ -1,6 +1,6 @@
 # T.A.R. — The Akashic Records
 
-**Release candidate: 1.0.0-rc.1**
+**Release candidate: 1.1.0-rc.1**
 
 T.A.R. is an open, source-aware, community-governed multimodal AI platform for preserving, searching, analyzing, verifying, creating and expanding knowledge while retaining provenance.
 
@@ -22,6 +22,27 @@ T.A.R. is not an oracle. Source evidence, persistent memory, model interpretatio
 - Freedmen records research strategy
 - operator-supplied archival datasets and documents
 - source URLs, retrieval metadata, dates when available and provenance metadata
+
+### Foundational Citizenship Commission case engine
+
+T.A.R. includes an optional Commission workflow designed to support — not replace — human citizenship review. Commission routes require an authenticated T.A.R. API key even if the general development API permits anonymous access.
+
+The case engine provides:
+
+- credential-scoped case access roles (`owner`, `commissioner`, `staff`, `reviewer`, `readonly`)
+- strict case-level isolation inside a Commission workspace
+- source tiers and human evidence statuses (`verified`, `corroborated`, `conflicting`, `unverified`, `insufficient`, `excluded`)
+- protected evidence uploads with SHA-256 and chain-of-custody metadata
+- case-local research plus restricted official/archive connectors by default
+- explicit broad-web override rather than implicit web evidence
+- human evidence review and source-tier correction
+- legal holds and policy-based retention deletion
+- case-authorized audit and protected-artifact retrieval
+- a hard block preventing protected Commission evidence from public IPFS publication
+
+The generic artifact and audit APIs deliberately hide protected Commission originals/events. Commission materials use `/v1/commission/*` routes so case grants remain enforceable. Applicant evidence should not be placed into the generic workspace ingestion pipeline.
+
+See [`docs/TAR-CITIZENSHIP-COMMISSION-INTEGRATION.md`](docs/TAR-CITIZENSHIP-COMMISSION-INTEGRATION.md) and [`docs/COMMISSION_CASE_ENGINE.md`](docs/COMMISSION_CASE_ENGINE.md).
 
 ### Ingestion and research library
 
@@ -88,6 +109,7 @@ Runs and individual steps are persisted and remain workspace-scoped.
 - explicit, opt-in public IPFS publication
 - artifact CID plus a separate canonical provenance-manifest CID
 - public IPFS publication is disabled by default and requires administrative authorization and explicit acknowledgement of immutable/public storage
+- protected Commission originals cannot be published through the IPFS endpoint even by an administrator
 
 ### Governance
 
@@ -110,6 +132,12 @@ Operator / API Client
         |
         v
 FastAPI + Workspace Identity
+        |
+        +--> Commission Case Engine
+        |        +--> Per-Key Case Grants
+        |        +--> Evidence + Protected Artifacts
+        |        +--> Restricted Archive Research
+        |        `--> Case Audit / Retention
         |
         +--> Bounded Agent Planner/Executor
         |        +--> Search / Recall / Research
@@ -180,13 +208,9 @@ SearXNG is exposed only on localhost by the supplied development configuration. 
 docker compose --profile monitoring up --build
 ```
 
-Prometheus is available on localhost port `9090`.
+Prometheus is then available on localhost port `9090`.
 
-### Optional shared artifact storage
-
-The `distributed-storage` profile provides local MinIO infrastructure for S3-compatible testing. Configure the S3 environment variables in `.env` and set `TAR_ARTIFACT_BACKEND=s3` for T.A.R. services that should use it.
-
-## Development
+## Development setup
 
 ```bash
 python -m venv .venv
@@ -197,141 +221,89 @@ pytest -q
 uvicorn backend.app.production:app --reload
 ```
 
-`TAR_AUTO_SCHEMA_BOOTSTRAP=auto` retains convenient SQLite bootstrap behavior for development. Production/PostgreSQL deployments use Alembic as the schema authority.
+## Core API surfaces
 
-## Important API surfaces
-
-### Research
+### Research and memory
 
 - `POST /v1/ask`
 - `POST /v1/search`
 - `POST /v1/memory/recall`
 - `GET /v1/memory/stats`
 
-### Agents
+### Commission cases
 
-- `POST /v1/agents/run`
-- `GET /v1/agents/runs/{run_id}`
+- `POST /v1/commission/cases`
+- `GET /v1/commission/cases`
+- `PATCH /v1/commission/cases/{case_id}`
+- `POST /v1/commission/cases/{case_id}/research`
+- `POST /v1/commission/cases/{case_id}/evidence`
+- `POST /v1/commission/cases/{case_id}/evidence/upload`
+- `GET /v1/commission/cases/{case_id}/evidence`
+- `PATCH /v1/commission/evidence/{evidence_id}/review`
+- `GET /v1/commission/cases/{case_id}/artifacts/{artifact_id}`
+- `GET /v1/commission/cases/{case_id}/audit`
+- `GET /v1/commission/cases/{case_id}/export`
+- case access management under `/v1/commission/cases/{case_id}/access`
 
-### Ingestion and library
+### Knowledge ingestion
 
 - `POST /v1/ingest/file`
 - `GET /v1/ingest/jobs/{job_id}`
 - `GET /v1/documents`
-- `GET /v1/library`
-- `GET /v1/library/{document_id}`
-- `PUT /v1/library/{document_id}`
 
-### Distributed jobs
+### Durable jobs and agents
 
 - `POST /v1/jobs`
 - `GET /v1/jobs/{job_id}`
-- authenticated worker claim/complete/fail routes
+- `/v1/agents/*`
 
-### Documents and media
+### Artifacts and tools
 
+- `GET /v1/artifacts`
+- `GET /v1/artifacts/{artifact_id}`
 - `/v1/doc-tools/*`
 - `/v1/media/*`
 - `/v1/tools/csv`
 - `/v1/tools/image-metadata`
 
-### Artifacts and provenance
+### Control and provenance
 
-- `GET /v1/artifacts`
-- `GET /v1/artifacts/{artifact_id}`
-- publication routes mounted by the production app
-- `GET /v1/audit`
-- `GET /v1/audit/verify`
-
-### Operations and governance
-
-- `/v1/system/providers`
-- `/v1/system/capabilities`
-- `/v1/system/storage`
-- `/v1/system/version`
 - `/v1/admin/*`
 - `/v1/nodes*`
+- `/v1/audit`
+- `/v1/audit/verify`
 - `/v1/governance*`
+- `/v1/system/providers`
+- `/v1/system/capabilities`
+- `/v1/system/version`
 
-## Production security
+## Model and media providers
 
-When `TAR_ENV=production`, T.A.R. fails closed unless core production requirements are satisfied. Among other checks, production requires:
+T.A.R. ships provider interfaces, not fabricated service URLs or bundled proprietary credentials. Configure supported endpoints in `.env`.
 
-- PostgreSQL
-- `TAR_REQUIRE_API_KEY=true`
-- strong, distinct `TAR_ADMIN_KEY` and `TAR_WORKER_KEY`
-- explicit HTTPS allowed origins
-- API-host code execution disabled
-- valid artifact-backend configuration
+Without an LLM endpoint, `TAR_LLM_PROVIDER=echo` keeps research/evidence inspection usable for development without pretending model synthesis occurred.
 
-Code execution is not an autonomous-agent capability. The separate explicit Python/code primitive remains disabled by default and belongs only in hardened disposable sandbox workers if an operator intentionally enables it.
+## Security and production
 
-Read [`SECURITY.md`](SECURITY.md) and [`docs/PRODUCTION_RUNBOOK.md`](docs/PRODUCTION_RUNBOOK.md) before network deployment.
+Stored memory, documents, ordinary artifacts and general research are workspace-scoped. Commission case materials add a second case-level authorization boundary and must use Commission-specific routes.
 
-## Provider configuration
+Administrative actions use `TAR_ADMIN_KEY`; worker operations use a separate worker trust boundary. Arbitrary code execution remains disabled on API hosts and should only be enabled inside hardened disposable sandbox workers.
 
-T.A.R. ships provider interfaces—not invented service URLs and not proprietary credentials.
+Production should use PostgreSQL, durable shared artifact/object storage, TLS, secret management, API authentication, backup/restore drills and monitoring. Read [`SECURITY.md`](SECURITY.md), [`docs/PRODUCTION_RUNBOOK.md`](docs/PRODUCTION_RUNBOOK.md), and [`docs/RELEASE_CHECKLIST.md`](docs/RELEASE_CHECKLIST.md).
 
-Operators choose and configure:
+## Database migrations
 
-- language model endpoint/model
-- image generation/editing endpoint/model
-- video endpoint/model
-- transcription endpoint/model
-- NARA API key
-- optional NCBI identity/API key
-- optional SearXNG instance
-- optional blockchain RPC + governance contract
+Fresh databases:
 
-If no LLM endpoint is configured, the development echo provider keeps retrieval/evidence paths testable without pretending model synthesis occurred.
+```bash
+alembic upgrade head
+```
 
-## Release qualification
+Commission persistence is introduced by revision `0005_commission_cases`.
 
-CI is designed to validate:
+## CI and releases
 
-- Python compilation
-- frontend JavaScript syntax
-- PostgreSQL migration upgrade → downgrade → upgrade
-- Alembic model/migration drift
-- Python tests
-- live API + worker smoke test
-- ingestion and recall
-- research-library persistence
-- bounded-agent persistence
-- artifact creation/retrieval
-- audit-chain verification
-- distributed jobs
-- governance-contract tests
-- Docker Compose configuration
-- container image build
-- CodeQL and dependency-update workflows
-
-Tagged releases are separately gated before the container is published. The tag must match the repository `VERSION` file, and the release workflow reruns database migration, tests and live smoke validation before pushing to GitHub Container Registry and generating build provenance.
-
-See [`docs/RELEASE_CHECKLIST.md`](docs/RELEASE_CHECKLIST.md).
-
-## What code cannot provide by itself
-
-A production installation still requires real infrastructure and operator-owned credentials where applicable: hosting, DNS/TLS, PostgreSQL, durable object storage, model/media provider access or self-hosted models, optional NARA credentials, optional SearXNG, optional blockchain RPC/contract deployment, secret management, monitoring destinations and backup storage.
-
-Those are deployment dependencies, not placeholder functionality. T.A.R. deliberately fails explicitly when a requested external provider is not configured.
-
-## Third-party design reference
-
-Phase 17 reviewed the MIT-licensed `Luiz-eduardp/akashic_records` project for compatible EPUB/offline-library concepts. T.A.R. reimplemented those concepts in its own architecture and did not vendor the upstream novel-site scraping plugins. See [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
-
-## Project documentation
-
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
-- [`docs/AUTONOMY.md`](docs/AUTONOMY.md)
-- [`docs/GOVERNANCE.md`](docs/GOVERNANCE.md)
-- [`docs/IPFS_PROVENANCE.md`](docs/IPFS_PROVENANCE.md)
-- [`docs/MIGRATIONS.md`](docs/MIGRATIONS.md)
-- [`docs/PRODUCTION_RUNBOOK.md`](docs/PRODUCTION_RUNBOOK.md)
-- [`docs/RELEASE_CHECKLIST.md`](docs/RELEASE_CHECKLIST.md)
-- [`SECURITY.md`](SECURITY.md)
-- [`CHANGELOG.md`](CHANGELOG.md)
-- [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)
+CI is configured for Python compilation/tests, PostgreSQL migrations and drift checks, live API/worker smoke tests, governance-contract tests, frontend syntax checks, Compose validation, Docker image builds and CodeQL. Tag releases are gated by version consistency and the release validation workflow before container publication.
 
 ## License
 
