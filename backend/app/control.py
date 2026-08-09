@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from sqlalchemy import Boolean, DateTime, Float, Integer, String, Text, select
 from sqlalchemy.orm import Mapped, Session, mapped_column
 
+from .bootstrap import in_migration_context, schema_bootstrap_enabled
 from .memory import Base, engine
 
 
@@ -56,7 +57,8 @@ class NodeRecord(Base):
     last_seen: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
 
-Base.metadata.create_all(engine)
+if schema_bootstrap_enabled():
+    Base.metadata.create_all(engine)
 
 
 def ensure_default_workspace() -> None:
@@ -66,7 +68,8 @@ def ensure_default_workspace() -> None:
             session.commit()
 
 
-ensure_default_workspace()
+if not in_migration_context():
+    ensure_default_workspace()
 
 
 def _hash_key(key: str) -> str:
@@ -105,47 +108,14 @@ def audit(action: str, object_type: str = "", object_id: str = "", payload: dict
     event_id = uuid.uuid4().hex
     created = datetime.now(timezone.utc).isoformat()
     with Session(engine) as session:
-        # Lock the workspace row so concurrent requests cannot fork the same audit head.
         workspace = session.scalar(select(Workspace).where(Workspace.id == workspace_id).with_for_update())
         if not workspace:
             raise ValueError(f"Unknown workspace for audit event: {workspace_id}")
-        previous = session.scalar(
-            select(AuditEvent)
-            .where(AuditEvent.workspace_id == workspace_id)
-            .order_by(AuditEvent.id.desc())
-            .limit(1)
-        )
+        previous = session.scalar(select(AuditEvent).where(AuditEvent.workspace_id == workspace_id).order_by(AuditEvent.id.desc()).limit(1))
         prev_hash = previous.event_hash if previous else ""
-        canonical = json.dumps(
-            {
-                "event_id": event_id,
-                "workspace_id": workspace_id,
-                "actor": actor,
-                "action": action,
-                "object_type": object_type,
-                "object_id": object_id,
-                "payload": payload or {},
-                "prev_hash": prev_hash,
-                "created_at": created,
-            },
-            sort_keys=True,
-            separators=(",", ":"),
-            ensure_ascii=False,
-        )
+        canonical = json.dumps({"event_id": event_id, "workspace_id": workspace_id, "actor": actor, "action": action, "object_type": object_type, "object_id": object_id, "payload": payload or {}, "prev_hash": prev_hash, "created_at": created}, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
         event_hash = hashlib.sha256(canonical.encode()).hexdigest()
-        session.add(
-            AuditEvent(
-                event_id=event_id,
-                workspace_id=workspace_id,
-                actor=actor,
-                action=action,
-                object_type=object_type,
-                object_id=object_id,
-                payload_json=json.dumps({"payload": payload or {}, "canonical_created_at": created}, ensure_ascii=False),
-                prev_hash=prev_hash,
-                event_hash=event_hash,
-            )
-        )
+        session.add(AuditEvent(event_id=event_id, workspace_id=workspace_id, actor=actor, action=action, object_type=object_type, object_id=object_id, payload_json=json.dumps({"payload": payload or {}, "canonical_created_at": created}, ensure_ascii=False), prev_hash=prev_hash, event_hash=event_hash))
         session.commit()
     return {"event_id": event_id, "event_hash": event_hash, "prev_hash": prev_hash}
 
@@ -156,28 +126,12 @@ def audit_tail(limit: int = 100, workspace_id: str | None = None) -> list[dict]:
         if workspace_id:
             stmt = stmt.where(AuditEvent.workspace_id == workspace_id)
         rows = session.scalars(stmt.order_by(AuditEvent.id.desc()).limit(limit)).all()
-    return [
-        {
-            "event_id": r.event_id,
-            "workspace_id": r.workspace_id,
-            "actor": r.actor,
-            "action": r.action,
-            "object_type": r.object_type,
-            "object_id": r.object_id,
-            "payload": json.loads(r.payload_json or "{}").get("payload", {}),
-            "prev_hash": r.prev_hash,
-            "event_hash": r.event_hash,
-            "created_at": r.created_at.isoformat() if r.created_at else None,
-        }
-        for r in rows
-    ]
+    return [{"event_id": r.event_id, "workspace_id": r.workspace_id, "actor": r.actor, "action": r.action, "object_type": r.object_type, "object_id": r.object_id, "payload": json.loads(r.payload_json or "{}").get("payload", {}), "prev_hash": r.prev_hash, "event_hash": r.event_hash, "created_at": r.created_at.isoformat() if r.created_at else None} for r in rows]
 
 
 def verify_audit_chain(workspace_id: str = "default") -> dict:
     with Session(engine) as session:
-        rows = session.scalars(
-            select(AuditEvent).where(AuditEvent.workspace_id == workspace_id).order_by(AuditEvent.id.asc())
-        ).all()
+        rows = session.scalars(select(AuditEvent).where(AuditEvent.workspace_id == workspace_id).order_by(AuditEvent.id.asc())).all()
     previous = ""
     for row in rows:
         stored = json.loads(row.payload_json or "{}")
@@ -185,22 +139,7 @@ def verify_audit_chain(workspace_id: str = "default") -> dict:
         payload = stored.get("payload", {})
         if not canonical_created_at:
             return {"valid": False, "events": len(rows), "failed_event": row.event_id, "reason": "legacy event lacks canonical timestamp"}
-        canonical = json.dumps(
-            {
-                "event_id": row.event_id,
-                "workspace_id": row.workspace_id,
-                "actor": row.actor,
-                "action": row.action,
-                "object_type": row.object_type,
-                "object_id": row.object_id,
-                "payload": payload,
-                "prev_hash": previous,
-                "created_at": canonical_created_at,
-            },
-            sort_keys=True,
-            separators=(",", ":"),
-            ensure_ascii=False,
-        )
+        canonical = json.dumps({"event_id": row.event_id, "workspace_id": row.workspace_id, "actor": row.actor, "action": row.action, "object_type": row.object_type, "object_id": row.object_id, "payload": payload, "prev_hash": previous, "created_at": canonical_created_at}, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
         expected = hashlib.sha256(canonical.encode()).hexdigest()
         if row.prev_hash != previous or row.event_hash != expected:
             return {"valid": False, "events": len(rows), "failed_event": row.event_id, "reason": "hash mismatch"}
@@ -231,15 +170,4 @@ def heartbeat_node(node_id: str) -> dict | None:
 def list_nodes() -> list[dict]:
     with Session(engine) as session:
         rows = session.scalars(select(NodeRecord).order_by(NodeRecord.last_seen.desc())).all()
-    return [
-        {
-            "node_id": r.node_id,
-            "name": r.name,
-            "endpoint": r.endpoint,
-            "capabilities": json.loads(r.capabilities_json or "[]"),
-            "reputation": r.reputation,
-            "active": r.active,
-            "last_seen": r.last_seen.isoformat() if r.last_seen else None,
-        }
-        for r in rows
-    ]
+    return [{"node_id": r.node_id, "name": r.name, "endpoint": r.endpoint, "capabilities": json.loads(r.capabilities_json or "[]"), "reputation": r.reputation, "active": r.active, "last_seen": r.last_seen.isoformat() if r.last_seen else None} for r in rows]
