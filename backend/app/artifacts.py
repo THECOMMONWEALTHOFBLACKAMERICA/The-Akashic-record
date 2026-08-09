@@ -67,10 +67,12 @@ def save_artifact(name: str, data: bytes, media_type: str, metadata: dict | None
     return {"artifact_id": artifact_id, "name": safe, "media_type": media_type, "sha256": digest, "size_bytes": len(data), "workspace_id": workspace_id, "storage_backend": storage.name}
 
 
-def get_artifact(artifact_id: str, workspace_id: str = "default") -> tuple[ArtifactRecord, bytes] | None:
+def get_artifact(artifact_id: str, workspace_id: str = "default", *, include_protected: bool = False) -> tuple[ArtifactRecord, bytes] | None:
     with Session(engine) as session:
         row = session.scalar(select(ArtifactRecord).where(ArtifactRecord.artifact_id == artifact_id, ArtifactRecord.workspace_id == workspace_id))
         if not row:
+            return None
+        if is_protected_artifact(row) and not include_protected:
             return None
         session.expunge(row)
     data = read_artifact_uri(row.path)
