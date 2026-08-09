@@ -44,13 +44,15 @@ def grant_case_access(case_id: str, workspace_id: str, key_id: str, role: str = 
         return serialize_access(row)
 
 
-def has_case_access(case_id: str, workspace_id: str, key_id: str, *, write: bool = False, review: bool = False) -> bool:
+def has_case_access(case_id: str, workspace_id: str, key_id: str, *, write: bool = False, review: bool = False, manage: bool = False) -> bool:
     if not key_id:
         return False
     with Session(engine) as session:
         row = session.scalar(select(CommissionCaseAccess).where(CommissionCaseAccess.case_id == case_id, CommissionCaseAccess.workspace_id == workspace_id, CommissionCaseAccess.key_id == key_id))
         if not row:
             return False
+        if manage:
+            return row.role in {"owner", "commissioner"}
         if review:
             return row.role in {"owner", "commissioner", "reviewer"}
         if write:
