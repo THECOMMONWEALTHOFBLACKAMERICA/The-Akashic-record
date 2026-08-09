@@ -6,18 +6,17 @@ import json
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterable
 
 import fitz
 from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, select
 from sqlalchemy.orm import Mapped, Session, mapped_column
 
+from .document_tools import docx_to_text, pptx_to_text, xlsx_to_text
 from .memory import Base, engine
 
 
 class DocumentRecord(Base):
     __tablename__ = "documents"
-
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     document_id: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     title: Mapped[str] = mapped_column(String(1000))
@@ -31,7 +30,6 @@ class DocumentRecord(Base):
 
 class ChunkRecord(Base):
     __tablename__ = "document_chunks"
-
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     document_id: Mapped[str] = mapped_column(String(64), ForeignKey("documents.document_id"), index=True)
     ordinal: Mapped[int] = mapped_column(Integer)
@@ -44,7 +42,6 @@ class ChunkRecord(Base):
 
 class IngestJob(Base):
     __tablename__ = "ingest_jobs"
-
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     status: Mapped[str] = mapped_column(String(30), index=True, default="queued")
     title: Mapped[str] = mapped_column(String(1000), default="")
@@ -68,7 +65,7 @@ def _chunk_text(text: str, size: int = 1400, overlap: int = 220) -> list[tuple[i
     text = text.replace("\x00", " ").strip()
     if not text:
         return []
-    chunks: list[tuple[int, int, str]] = []
+    chunks = []
     start = 0
     while start < len(text):
         end = min(len(text), start + size)
@@ -107,6 +104,12 @@ def parse_bytes(filename: str, data: bytes) -> tuple[str, list[tuple[int | None,
         return "application/pdf", _pdf_text(data)
     if suffix in {".csv", ".json"}:
         return ("application/json" if suffix == ".json" else "text/csv"), [(None, _tabular_text(data, suffix))]
+    if suffix == ".docx":
+        return "application/vnd.openxmlformats-officedocument.wordprocessingml.document", [(None, docx_to_text(data))]
+    if suffix == ".xlsx":
+        return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", [(None, xlsx_to_text(data))]
+    if suffix == ".pptx":
+        return "application/vnd.openxmlformats-officedocument.presentationml.presentation", [(None, pptx_to_text(data))]
     return "text/plain", [(None, data.decode("utf-8", errors="replace"))]
 
 
@@ -119,13 +122,11 @@ def ingest_bytes(filename: str, data: bytes, *, title: str | None = None, source
             count = len(session.scalars(select(ChunkRecord).where(ChunkRecord.document_id == existing.document_id)).all())
             return {"job_id": job_id, "status": "deduplicated", "document_id": existing.document_id, "chunks": count}
         job = IngestJob(id=job_id, status="processing", title=title or filename, source=source)
-        session.add(job)
-        session.commit()
-
+        session.add(job); session.commit()
     try:
         media_type, page_texts = parse_bytes(filename, data)
         document_id = uuid.uuid4().hex
-        chunk_rows: list[ChunkRecord] = []
+        chunk_rows = []
         ordinal = 0
         for page, text in page_texts:
             for start, end, chunk in _chunk_text(text):
@@ -134,28 +135,19 @@ def ingest_bytes(filename: str, data: bytes, *, title: str | None = None, source
         with Session(engine) as session:
             session.add(DocumentRecord(document_id=document_id, title=title or filename, source=source, source_uri=source_uri, media_type=media_type, sha256=digest, metadata_json=json.dumps(metadata or {}, ensure_ascii=False)))
             session.add_all(chunk_rows)
-            job = session.get(IngestJob, job_id)
-            job.status = "completed"
-            job.document_id = document_id
-            job.chunks = len(chunk_rows)
-            job.finished_at = datetime.now(timezone.utc)
+            job = session.get(IngestJob, job_id); job.status = "completed"; job.document_id = document_id; job.chunks = len(chunk_rows); job.finished_at = datetime.now(timezone.utc)
             session.commit()
         return {"job_id": job_id, "status": "completed", "document_id": document_id, "chunks": len(chunk_rows), "sha256": digest}
     except Exception as exc:
         with Session(engine) as session:
-            job = session.get(IngestJob, job_id)
-            job.status = "failed"
-            job.error = str(exc)
-            job.finished_at = datetime.now(timezone.utc)
-            session.commit()
+            job = session.get(IngestJob, job_id); job.status = "failed"; job.error = str(exc); job.finished_at = datetime.now(timezone.utc); session.commit()
         raise
 
 
 def get_job(job_id: str) -> dict | None:
     with Session(engine) as session:
         job = session.get(IngestJob, job_id)
-        if not job:
-            return None
+        if not job: return None
         return {"id": job.id, "status": job.status, "title": job.title, "source": job.source, "document_id": job.document_id, "chunks": job.chunks, "error": job.error, "created_at": job.created_at.isoformat() if job.created_at else None, "finished_at": job.finished_at.isoformat() if job.finished_at else None}
 
 
