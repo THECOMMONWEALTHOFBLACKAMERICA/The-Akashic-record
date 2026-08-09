@@ -1,11 +1,46 @@
 from __future__ import annotations
 
 from .commission import add_evidence, export_case
-from .retrieval import hybrid_recall
 from .sources import search_all
 
 OFFICIAL_SOURCES = ["nara", "loc", "freedmen"]
 BROAD_SOURCES = ["web", "wikipedia", "wikidata"]
+
+
+def _case_local_hits(query: str, evidence: list[dict], limit: int) -> list[dict]:
+    """Search only evidence already belonging to this case.
+
+    Commission research must never use workspace-wide recall because a Commission
+    workspace can contain multiple applicant cases. A future shared reference
+    corpus must have its own explicit vetted namespace before it is queried here.
+    """
+    tokens = {t.lower() for t in query.split() if len(t) > 2}
+    scored: list[tuple[int, dict]] = []
+    for item in evidence:
+        haystack = " ".join(
+            str(item.get(k) or "")
+            for k in ["title", "source", "source_uri", "citation", "claimed_provenance", "review_notes"]
+        ).lower()
+        score = sum(1 for token in tokens if token in haystack)
+        if score:
+            scored.append(
+                (
+                    score,
+                    {
+                        "source": "commission_case_evidence",
+                        "title": item.get("title") or "Case evidence",
+                        "url": item.get("source_uri") or "",
+                        "snippet": item.get("citation") or item.get("claimed_provenance") or "Existing case evidence",
+                        "confidence": 1.0,
+                        "case_evidence_id": item.get("evidence_id"),
+                        "source_tier": item.get("source_tier"),
+                        "status": item.get("status"),
+                        "provenance": {"case_local": True},
+                    },
+                )
+            )
+    scored.sort(key=lambda pair: pair[0], reverse=True)
+    return [item for _, item in scored[:limit]]
 
 
 async def research_case(
@@ -27,10 +62,7 @@ async def research_case(
         for e in existing_evidence
     }
 
-    # Search workspace-scoped ingested/vetted material first. Local corpus hits
-    # are still pending human classification unless their provenance already
-    # establishes the source tier.
-    local_hits = hybrid_recall(query, limit=max(1, min(limit, 25)), workspace_id=workspace_id)
+    local_hits = _case_local_hits(query, existing_evidence, max(1, min(limit, 25)))
 
     sources = list(OFFICIAL_SOURCES)
     if include_dawes:
@@ -44,7 +76,7 @@ async def research_case(
     results: list[dict] = []
     seen: set[tuple] = set()
     for item in local_hits + remote_hits:
-        key = (item.get("url"), item.get("document_id"), item.get("chunk_id"), item.get("title"), item.get("source"))
+        key = (item.get("url"), item.get("case_evidence_id"), item.get("title"), item.get("source"))
         if key in seen:
             continue
         seen.add(key)
@@ -53,7 +85,9 @@ async def research_case(
     evidence = []
     skipped_existing = 0
     if persist_as_evidence:
-        for item in results:
+        for item in remote_hits:
+            # Existing case-local evidence is returned for context but is not
+            # reinserted as a new evidence row.
             source = str(item.get("source") or "")
             source_uri = str(item.get("url") or "")
             title = str(item.get("title") or "Retrieved record")
@@ -62,12 +96,7 @@ async def research_case(
                 skipped_existing += 1
                 continue
 
-            # NARA, purpose-built Freedmen/Final Rolls results and already-vetted
-            # ingested records may begin as Tier 1 candidates. Library of Congress
-            # and general discovery sources begin at Tier 2 because LOC holdings
-            # can include both primary and published/corroborating material.
-            # Commissioners can correct the source tier during review.
-            tier = 1 if source in {"national_archives", "freedmen_records_research", "dawes_rolls_research"} or item.get("document_id") else 2
+            tier = 1 if source in {"national_archives", "freedmen_records_research", "dawes_rolls_research"} else 2
             created = add_evidence(
                 case_id,
                 workspace_id,
@@ -80,9 +109,6 @@ async def research_case(
                     "query": query,
                     "provenance": item.get("provenance") or {},
                     "date": item.get("date"),
-                    "document_id": item.get("document_id"),
-                    "chunk_id": item.get("chunk_id"),
-                    "retrieval_score": item.get("retrieval_score"),
                     "tier_is_initial_classification": True,
                 },
                 claimed_provenance="T.A.R.-retrieved; pending Commission verification",
@@ -101,4 +127,5 @@ async def research_case(
         "results": results,
         "evidence_created": evidence,
         "evidence_skipped_existing": skipped_existing,
+        "workspace_wide_recall_used": False,
     }
