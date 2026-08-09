@@ -3,12 +3,13 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
-from .artifacts import save_artifact
+from .artifacts import delete_artifact, save_artifact
 from .auth import require_authenticated_identity
-from .commission import add_evidence, create_case, export_case, list_cases, list_evidence, review_evidence, update_case
+from .commission import add_evidence, create_case, export_case, list_cases, list_evidence, update_case
 from .commission_access import accessible_case_ids, grant_case_access, has_case_access, list_case_access, revoke_case_access
 from .commission_research import research_case
 from .commission_retention import delete_case_with_retention
+from .commission_review import review_and_retier_evidence
 from .control import audit
 
 router = APIRouter(prefix="/v1/commission", tags=["commission"])
@@ -52,6 +53,7 @@ class EvidenceCreate(BaseModel):
 
 class EvidenceReview(BaseModel):
     status: str
+    source_tier: int | None = Field(default=None, ge=1, le=3)
     review_notes: str = ""
     exclusion_reason: str = ""
 
@@ -86,7 +88,6 @@ def cases(limit: int = 200, identity: dict = Depends(require_authenticated_ident
 
 @router.patch("/cases/{case_id}")
 def patch_case(case_id: str, req: CaseUpdate, identity: dict = Depends(require_authenticated_identity)):
-    # Legal holds, retention and case dispositions are policy-bearing controls.
     if req.legal_hold is not None or req.retention_policy is not None or req.status in {"approved", "denied", "appealed", "closed"}:
         _require(case_id, identity, manage=True)
     else:
@@ -173,13 +174,17 @@ async def upload_evidence(case_id: str, file: UploadFile = File(...), title: str
         raise HTTPException(status_code=400, detail="Empty file")
     if len(data) > 100 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="File exceeds 100 MB Commission upload limit")
+    original = None
     try:
         original = save_artifact(file.filename or "evidence.bin", data, file.content_type or "application/octet-stream", {"classification": "commission_original_evidence", "case_id": case_id, "public_ipfs_allowed": False}, identity["workspace_id"])
         return add_evidence(case_id, identity["workspace_id"], title=title or file.filename or "Submitted evidence", source_tier=source_tier, source=source, citation=citation, retrieval_metadata={"original_artifact_id": original["artifact_id"], "storage_backend": original.get("storage_backend")}, original_filename=file.filename or "evidence.bin", original_bytes=data, uploader=identity["label"], claimed_provenance=claimed_provenance, media_type=file.content_type or "application/octet-stream", transformations=[], derived_artifacts=[], actor=identity["label"])
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except (KeyError, ValueError) as exc:
+        if original:
+            try:
+                delete_artifact(original["artifact_id"], identity["workspace_id"])
+            except Exception:
+                pass
+        raise HTTPException(status_code=404 if isinstance(exc, KeyError) else 400, detail=str(exc)) from exc
 
 
 @router.get("/cases/{case_id}/evidence")
@@ -202,7 +207,7 @@ def review(evidence_id: str, req: EvidenceReview, identity: dict = Depends(requi
     if not matching_case or not has_case_access(matching_case, identity["workspace_id"], identity["key_id"], review=True):
         raise HTTPException(status_code=403, detail="Commission reviewer access required")
     try:
-        return review_evidence(evidence_id, identity["workspace_id"], status=req.status, reviewer=identity["label"], review_notes=req.review_notes, exclusion_reason=req.exclusion_reason)
+        return review_and_retier_evidence(evidence_id, identity["workspace_id"], status=req.status, source_tier=req.source_tier, reviewer=identity["label"], review_notes=req.review_notes, exclusion_reason=req.exclusion_reason)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
