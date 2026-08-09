@@ -4,8 +4,14 @@ from fastapi import APIRouter, Depends
 
 from .auth import require_identity
 from .provider_status import provider_status
+from .version import VERSION
 
 router = APIRouter(prefix="/v1/system", tags=["operations"])
+
+
+@router.get("/version")
+def version():
+    return {"service": "tar-api", "version": VERSION}
 
 
 @router.get("/providers")
@@ -18,6 +24,7 @@ def providers(identity: dict = Depends(require_identity)):
 def capabilities(identity: dict = Depends(require_identity)):
     providers = provider_status()["configured"]
     return {
+        "version": VERSION,
         "research": True,
         "ingestion": ["txt", "md", "csv", "json", "pdf", "docx", "xlsx", "pptx"],
         "documents": ["pdf_create", "pdf_merge", "pdf_annotate", "docx_create", "xlsx_create"],
