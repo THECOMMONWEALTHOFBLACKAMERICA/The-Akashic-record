@@ -21,6 +21,7 @@ services:
     env_file: .env
     environment:
       TAR_DATABASE_URL: postgresql+psycopg://tar:${TAR_POSTGRES_PASSWORD}@postgres:5432/tar
+      TAR_AUTO_SCHEMA_BOOTSTRAP: "false"
     depends_on:
       postgres:
         condition: service_healthy
@@ -33,6 +34,7 @@ services:
     env_file: .env
     environment:
       TAR_DATABASE_URL: postgresql+psycopg://tar:${TAR_POSTGRES_PASSWORD}@postgres:5432/tar
+      TAR_AUTO_SCHEMA_BOOTSTRAP: "false"
       TAR_ARTIFACT_DIR: /app/data/artifacts
       TAR_ENABLE_CODE_EXECUTION: "false"
     ports: ["8000:8000"]
@@ -58,9 +60,10 @@ services:
     env_file: .env
     environment:
       TAR_DATABASE_URL: postgresql+psycopg://tar:${TAR_POSTGRES_PASSWORD}@postgres:5432/tar
+      TAR_AUTO_SCHEMA_BOOTSTRAP: "false"
       TAR_ARTIFACT_DIR: /app/data/artifacts
       TAR_NODE_NAME: tar-worker-1
-      TAR_NODE_CAPABILITIES: research,text,image,video
+      TAR_NODE_CAPABILITIES: agent,research,text,image,video
       TAR_ENABLE_CODE_EXECUTION: "false"
     volumes:
       - tar_data:/app/data
