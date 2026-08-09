@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from .library_api import router as library_router
 from .main import app
 from .observability import metrics_middleware, router as metrics_router
 from .operations import router as operations_router
@@ -10,3 +11,4 @@ app.middleware("http")(metrics_middleware)
 app.include_router(metrics_router)
 app.include_router(operations_router)
 app.include_router(publication_router)
+app.include_router(library_router)
