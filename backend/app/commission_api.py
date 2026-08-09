@@ -7,6 +7,7 @@ from .artifacts import delete_artifact, save_artifact
 from .auth import require_authenticated_identity
 from .commission import add_evidence, create_case, export_case, list_cases, list_evidence, update_case
 from .commission_access import accessible_case_ids, grant_case_access, has_case_access, list_case_access, revoke_case_access
+from .commission_audit import case_audit_events
 from .commission_research import research_case
 from .commission_retention import delete_case_with_retention
 from .commission_review import review_and_retier_evidence
@@ -114,6 +115,12 @@ def case_export(case_id: str, identity: dict = Depends(require_authenticated_ide
         return export_case(case_id, identity["workspace_id"])
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get("/cases/{case_id}/audit")
+def case_audit(case_id: str, limit: int = 200, identity: dict = Depends(require_authenticated_identity)):
+    _require(case_id, identity)
+    return {"events": case_audit_events(case_id, identity["workspace_id"], max(1, min(limit, 500)))}
 
 
 @router.delete("/cases/{case_id}")
