@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.16.0-rc.1
+
+### Public provenance
+- IPFS publication is now an explicit admin operation rather than an implied side effect of running an IPFS daemon
+- public publication is disabled by default behind `TAR_ENABLE_PUBLIC_IPFS`
+- administrators must explicitly acknowledge immutable/public storage before publishing
+- T.A.R. pins artifact bytes plus a canonical provenance manifest
+- publication records persist artifact CID, manifest CID, SHA-256 and workspace ownership
+- publication actions are written to the workspace audit chain
+- Alembic migration and publication tests added
+
 ## 0.15.0-rc.1
 
 ### Distributed storage

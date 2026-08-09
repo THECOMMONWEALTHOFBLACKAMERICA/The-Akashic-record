@@ -13,6 +13,7 @@ from backend.app import artifacts as _artifacts  # noqa: F401,E402
 from backend.app import control as _control  # noqa: F401,E402
 from backend.app import ingestion as _ingestion  # noqa: F401,E402
 from backend.app import jobs as _jobs  # noqa: F401,E402
+from backend.app import publications as _publications  # noqa: F401,E402
 
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.database_url)
