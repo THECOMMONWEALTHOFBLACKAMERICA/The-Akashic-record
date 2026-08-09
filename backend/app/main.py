@@ -9,6 +9,7 @@ from .auth import require_identity
 from .control import audit, audit_tail, create_api_key, create_workspace, heartbeat_node, list_nodes, register_node
 from .governance import proposal as governance_proposal, status as governance_status
 from .ingestion import get_job, ingest_bytes, list_documents
+from .jobs_api import router as jobs_router
 from .memory import remember, stats
 from .orchestrator import answer
 from .retrieval import hybrid_recall
@@ -16,8 +17,9 @@ from .settings import settings
 from .sources import search_all
 from .tools import analyze_csv, image_metadata
 
-app = FastAPI(title="T.A.R. API", version="0.5.0")
+app = FastAPI(title="T.A.R. API", version="0.6.0")
 app.add_middleware(CORSMiddleware, allow_origins=settings.allowed_origins, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+app.include_router(jobs_router)
 
 
 class AskRequest(BaseModel):
@@ -62,7 +64,7 @@ class NodeRequest(BaseModel):
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "service": "tar-api", "version": "0.5.0", "memory": stats(), "governance": governance_status()}
+    return {"status": "ok", "service": "tar-api", "version": "0.6.0", "memory": stats(), "governance": governance_status()}
 
 
 @app.post("/v1/ask")
