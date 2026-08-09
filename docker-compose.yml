@@ -1,20 +1,67 @@
 services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: tar
+      POSTGRES_USER: tar
+      POSTGRES_PASSWORD: tar_dev_change_me
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tar -d tar"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
   api:
     build:
       context: .
       dockerfile: backend/Dockerfile
     env_file: .env
+    environment:
+      TAR_DATABASE_URL: postgresql+psycopg://tar:tar_dev_change_me@postgres:5432/tar
+      TAR_ARTIFACT_DIR: /app/data/artifacts
     ports: ["8000:8000"]
-    volumes: ["./data:/app/data"]
-    depends_on: [ipfs]
+    volumes:
+      - tar_data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ipfs:
+        condition: service_started
+
+  worker:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: ["python", "-m", "backend.worker"]
+    env_file: .env
+    environment:
+      TAR_DATABASE_URL: postgresql+psycopg://tar:tar_dev_change_me@postgres:5432/tar
+      TAR_ARTIFACT_DIR: /app/data/artifacts
+      TAR_NODE_NAME: tar-worker-1
+      TAR_NODE_CAPABILITIES: research,text,image,video
+    volumes:
+      - tar_data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ipfs:
+        condition: service_started
+
   web:
     image: nginx:alpine
     ports: ["3000:80"]
     volumes: ["./frontend:/usr/share/nginx/html:ro"]
     depends_on: [api]
+
   ipfs:
     image: ipfs/kubo:latest
-    ports: ["4001:4001","5001:5001","8080:8080"]
-    volumes: ["ipfs_data:/data/ipfs"]
+    ports: ["4001:4001", "5001:5001", "8080:8080"]
+    volumes:
+      - ipfs_data:/data/ipfs
+
 volumes:
+  postgres_data:
   ipfs_data:
+  tar_data:
