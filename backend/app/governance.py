@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import os
 from functools import lru_cache
 
@@ -8,9 +7,21 @@ from web3 import Web3
 
 
 ABI = [
-    {"inputs":[{"internalType":"uint256","name":"id","type":"uint256"}],"name":"canExecute","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"},
-    {"inputs":[],"name":"proposalCount","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
-    {"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"proposals","outputs":[{"internalType":"address","name":"proposer","type":"address"},{"internalType":"bytes32","name":"actionHash","type":"bytes32"},{"internalType":"string","name":"description","type":"string"},{"internalType":"uint64","name":"createdAt","type":"uint64"},{"internalType":"uint64","name":"votingEnds","type":"uint64"},{"internalType":"uint64","name":"executeAfter","type":"uint64"},{"internalType":"uint128","name":"yesVotes","type":"uint128"},{"internalType":"uint128","name":"noVotes","type":"uint128"},{"internalType":"bool","name":"executed","type":"bool"},{"internalType":"bool","name":"cancelled","type":"bool"}],"stateMutability":"view","type":"function"}
+    {"inputs": [{"internalType": "uint256", "name": "id", "type": "uint256"}], "name": "canExecute", "outputs": [{"internalType": "bool", "name": "", "type": "bool"}], "stateMutability": "view", "type": "function"},
+    {"inputs": [], "name": "proposalCount", "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}], "stateMutability": "view", "type": "function"},
+    {"inputs": [{"internalType": "uint256", "name": "", "type": "uint256"}], "name": "proposalQuorum", "outputs": [{"internalType": "uint128", "name": "", "type": "uint128"}], "stateMutability": "view", "type": "function"},
+    {"inputs": [{"internalType": "uint256", "name": "", "type": "uint256"}], "name": "proposals", "outputs": [
+        {"internalType": "address", "name": "proposer", "type": "address"},
+        {"internalType": "bytes32", "name": "actionHash", "type": "bytes32"},
+        {"internalType": "string", "name": "description", "type": "string"},
+        {"internalType": "uint64", "name": "createdAt", "type": "uint64"},
+        {"internalType": "uint64", "name": "votingEnds", "type": "uint64"},
+        {"internalType": "uint64", "name": "executeAfter", "type": "uint64"},
+        {"internalType": "uint128", "name": "yesVotes", "type": "uint128"},
+        {"internalType": "uint128", "name": "noVotes", "type": "uint128"},
+        {"internalType": "bool", "name": "executed", "type": "bool"},
+        {"internalType": "bool", "name": "cancelled", "type": "bool"}
+    ], "stateMutability": "view", "type": "function"},
 ]
 
 
@@ -30,7 +41,13 @@ def status() -> dict:
     if not w3 or not contract:
         return {"configured": False}
     try:
-        return {"configured": True, "connected": bool(w3.is_connected()), "chain_id": int(w3.eth.chain_id), "contract": contract.address, "proposal_count": int(contract.functions.proposalCount().call())}
+        return {
+            "configured": True,
+            "connected": bool(w3.is_connected()),
+            "chain_id": int(w3.eth.chain_id),
+            "contract": contract.address,
+            "proposal_count": int(contract.functions.proposalCount().call()),
+        }
     except Exception as exc:
         return {"configured": True, "connected": False, "error": str(exc)}
 
@@ -50,6 +67,7 @@ def proposal(proposal_id: int) -> dict:
         "execute_after": int(p[5]),
         "yes_votes": int(p[6]),
         "no_votes": int(p[7]),
+        "quorum_required": int(contract.functions.proposalQuorum(proposal_id).call()),
         "executed": bool(p[8]),
         "cancelled": bool(p[9]),
         "can_execute": bool(contract.functions.canExecute(proposal_id).call()),
