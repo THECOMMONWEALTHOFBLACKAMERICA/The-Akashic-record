@@ -1,166 +1,81 @@
-# T.A.R. Museum & Digital Archive — Institutional Vision
+# T.A.R. — Digital Museum Aspect
 
-## Purpose
+## Core identity
 
-T.A.R. — The Akashic Records — is developing a public-facing digital museum and research archive alongside its existing open-source, provenance-aware knowledge platform.
+T.A.R. means **The Akashic Records**. It remains an open, source-aware, community-governed multimodal knowledge and research platform for preserving, searching, analyzing, verifying, creating, and expanding knowledge while retaining provenance.
 
-The technical platform and the museum serve different but complementary functions:
+The digital museum is **one public-facing aspect of T.A.R.** It does not replace, rename, or narrow the larger platform.
 
-- **T.A.R. platform:** preserves, searches, analyzes, verifies, and traces knowledge and source provenance.
-- **T.A.R. Museum & Digital Archive:** interprets documented evidence for the public through digital collections, exhibitions, genealogy, archival research, migration history, oral history, and source-driven storytelling.
+## What the museum aspect does
 
-The museum layer must never weaken the platform's core rule: evidence, interpretation, and uncertainty remain distinguishable.
+The museum aspect uses T.A.R.'s existing research, provenance, memory, ingestion, artifact, and verification capabilities to present selected historical and genealogical material to the public in a form that is understandable, sourced, and auditable.
 
-## Mission
+Possible public experiences include:
 
-Preserve, document, interpret, and make accessible African American family history and related public-history research while showing the sources, provenance, uncertainty, and corrections behind each conclusion.
+- curated digital exhibitions
+- family-history and genealogy collections
+- migration maps and timelines
+- digitized records and annotated sources
+- oral-history presentations
+- source galleries with provenance notes
+- research corrections showing how conclusions changed when new evidence appeared
+- public-history essays and educational material
 
-## Digital-first model
-
-T.A.R. is being designed as a **digital-first museum and research archive**. Public access can begin online through curated exhibits, research collections, timelines, family reconstructions, maps, digitized records, and provenance-linked source material.
-
-The long-term institutional vision may include physical collections care, rotating exhibitions, archival storage, public research access, and a physical facility or operated exhibition space where useful or required by future partnerships and funding programs.
-
-The project must distinguish clearly between:
-
-1. **What exists now** — software, research workflows, digital collections, public documentation, repository code, and published digital content.
-2. **What is being built** — museum-grade collection policies, public exhibitions, partnership infrastructure, preservation workflows, and formal institutional capacity.
-3. **What is a future goal** — any physical facility, formal accreditation, tax-exempt status, museum-program eligibility, major collection claims, staffing claims, or institutional partnerships not yet documented.
-
-## Collection and research areas
-
-The museum vision prioritizes:
-
-- African American genealogy and family reconstruction
-- census, deed, probate, court, tax, and land research
-- military service records
-- free-person, emancipation, and slavery-era documentation
-- migration mapping and community-network reconstruction
-- oral histories
-- photographs, family papers, correspondence, and donated digital materials
-- cemetery, church, school, and local-history records
-- public-history essays and curated digital exhibitions
-- DNA-assisted genealogy when used cautiously and corroborated with documentary evidence
-- machine-assisted research where model interpretation remains visibly separate from source evidence
+The platform remains broader than these museum uses.
 
 ## Research standard
 
-T.A.R. should label conclusions by evidence status rather than flattening them into a single narrative.
+The museum aspect follows the same evidence discipline as T.A.R. generally. Public conclusions should distinguish:
 
-Recommended public labels:
-
-- **Verified fact** — directly supported by a reliable primary or high-quality source.
+- **Verified fact** — directly supported by reliable evidence.
 - **Corroborated** — supported by multiple independent sources.
-- **Context** — historically relevant background that does not itself establish identity or relationship.
+- **Context** — relevant historical background that does not itself establish identity or relationship.
 - **Hypothesis** — a reasoned possibility requiring more evidence.
 - **Conflicting evidence** — records disagree and the disagreement remains unresolved.
 - **Unverified** — a claim exists but has not yet been adequately supported.
 
-Corrections should remain visible when practical. New evidence should be allowed to change prior conclusions.
+Source evidence, model interpretation, and uncertainty must remain visibly separate.
 
-## Public-facing principles
+## Collections and subjects
 
-### Evidence Before Assumption
-Do not fill documentary gaps with certainty.
+The museum aspect may present material involving:
 
-### Preserve the Record
-Protect source material, metadata, provenance, and research history.
+- African American genealogy and family reconstruction
+- census, deed, probate, court, tax, and land records
+- military service
+- free-person, emancipation, and slavery-era documentation
+- migration and community-network reconstruction
+- churches, schools, cemeteries, and local history
+- photographs, family papers, correspondence, and donated digital material
+- DNA-assisted genealogy when used cautiously with documentary evidence
+- machine-assisted research when the model's interpretation remains distinguishable from the underlying source
 
-### Show the Source
-A visitor should be able to understand why a conclusion was reached.
+## Current state and future goals
 
-### Correct the Record When Evidence Changes
-Revision is part of responsible research, not a failure of the project.
+Public materials must distinguish between what exists and what is only planned.
 
-### Protect Living People
-Sensitive information about living people should not be made public merely because it is technically available.
+**Current:** the T.A.R. software project, research workflows, provenance architecture, digital-document handling, repository code, and developing public digital content.
 
-## Digital exhibitions
+**Developing:** curated online exhibits, digital collections, collection policies, public research presentations, partnerships, and preservation workflows.
 
-The museum website can host rotating or permanent digital exhibitions built from documented research. Appropriate formats include:
+**Future possibilities:** physical exhibition space, physical collections care, formal museum recognition, tax-exempt status, grant-program eligibility, dedicated museum staff, or other institutional infrastructure.
 
-- interactive or static migration maps
-- family timelines
-- record-centered exhibits
-- annotated census and military records
-- reconstructed communities and kinship networks
-- oral-history presentations
-- before/after research corrections showing how conclusions changed
-- source galleries with provenance notes
-- thematic exhibits on freedom, migration, labor, land, military service, family separation, and reconstruction
-
-Placeholder exhibits must be labeled **Coming Soon** rather than presented as completed collections.
+None of those future possibilities should be presented as already achieved without documentation.
 
 ## Relationship to the Commonwealth of Black America
 
-T.A.R. may support Commonwealth historical, genealogical, archival, and evidence-management work while remaining a distinct research and museum project with its own public-history standards.
+T.A.R. may support Commonwealth historical, genealogical, archival, and evidence-management work while remaining a distinct knowledge and research platform.
 
-Protected or case-specific evidence must remain subject to the access controls already defined by the Commission case engine. Public museum publication must never bypass those controls.
+The museum aspect can make selected public-history material accessible to visitors. Protected Commission evidence remains governed by T.A.R.'s existing case-level access controls and must never be exposed merely because a public museum layer exists.
 
 ## Partnerships
 
-T.A.R. may seek collaboration with:
+T.A.R. may pursue collaborations with archives, libraries, museums, universities, HBCUs, historical societies, genealogical organizations, churches, community institutions, preservation groups, digital-humanities programs, funders, and fiscal sponsors.
 
-- archives and libraries
-- museums
-- universities and HBCUs
-- historical societies
-- genealogical societies
-- churches and community institutions
-- family-history organizations
-- preservation groups
-- digital-humanities programs
-- funders and fiscal sponsors
-
-A partnership should not be represented as active until the other institution has actually agreed to it.
-
-## Funding and legal-status accuracy
-
-Public materials must not state or imply that:
-
-- T.A.R. is a 501(c)(3) unless that status is documented.
-- contributions are tax-deductible unless legally authorized.
-- T.A.R. is accredited or formally recognized as a museum unless documented.
-- T.A.R. qualifies for a specific museum grant merely because it uses the word “museum.”
-- a physical collection, staff, facility, sponsor, grant, or institutional partner exists unless verified.
-
-The project may accurately describe these as goals, applications, partnership targets, or institutional-development work.
-
-## Website information architecture
-
-The public T.A.R. museum site should maintain these primary destinations:
-
-1. Home
-2. The Vision
-3. Research & Collections
-4. Digital Exhibitions
-5. Research Method
-6. Partnerships & Funding
-7. About
-8. Contact
-
-The site should use institutional museum language without pretending that future infrastructure already exists.
-
-## Relationship to the software roadmap
-
-The museum vision is not a separate replacement project. It is a public-history application layer for the T.A.R. platform.
-
-Potential integration points include:
-
-- provenance-linked exhibit objects
-- source citations generated from the research layer
-- digital collection ingestion
-- workspace-specific research collections
-- public/private publication boundaries
-- artifact SHA-256 integrity checks
-- controlled public IPFS publication where explicitly authorized
-- audit trails for corrections and exhibit revisions
-- digital exhibit search and retrieval
+A partnership should not be described as active until it has actually been established.
 
 ## Accuracy rule
 
-**Do not make the project look more established by inventing establishment facts.**
+Do not invent addresses, phone numbers, staff, founding dates, collection counts, grants, affiliations, nonprofit status, accreditation, or museum credentials.
 
-No fake addresses, phone numbers, staff lists, founding dates, collection counts, grant awards, affiliations, museum credentials, or social accounts should appear on the website or in repository documentation.
-
-Credibility comes from showing what T.A.R. can prove, what it is building, and what still remains a goal.
+The museum aspect should strengthen T.A.R.'s central idea: **preserve the record, show the evidence, retain provenance, and revise conclusions when the evidence changes.**
