@@ -2,6 +2,14 @@
 
 **Release candidate: 1.1.0-rc.1**
 
+## Project links
+
+- [Website and ecosystem status](PROJECT-LINKS.md)
+- [Commonwealth of Black America public record](https://github.com/THECOMMONWEALTHOFBLACKAMERICA/Commonwealth-of-Black-America)
+- [CRFTE / CRTFE atmospheric electromagnetic propulsion research](https://github.com/THECOMMONWEALTHOFBLACKAMERICA/CRFTE)
+
+No standalone public T.A.R. website has been verified or published yet; this repository remains the canonical public project location.
+
 T.A.R. is an open, source-aware, community-governed multimodal AI platform for preserving, searching, analyzing, verifying, creating and expanding knowledge while retaining provenance.
 
 T.A.R. is not an oracle. Source evidence, persistent memory, model interpretation, execution and governance are deliberately separate layers so generated claims remain auditable.
