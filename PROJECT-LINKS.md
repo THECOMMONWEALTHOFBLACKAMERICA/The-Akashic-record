@@ -4,18 +4,22 @@
 
 https://github.com/THECOMMONWEALTHOFBLACKAMERICA/The-Akashic-record
 
+## Core Identity
+
+T.A.R. means **The Akashic Records**. It is a standalone open-source, source-aware knowledge and research platform. A developing digital museum is one public-facing aspect of T.A.R.; it does not replace the larger platform.
+
+## Public T.A.R. Site
+
+- **T.A.R. public site:** https://dorianmartinsmith.wixsite.com/tar-museum-digi
+- The public site currently emphasizes the developing digital-museum and archive experience while the repository remains the canonical location for T.A.R.'s technical platform, architecture, code, and release status.
+
 ## Commonwealth Relationship
 
-T.A.R. is part of the wider Commonwealth of Black America project ecosystem while remaining a standalone open-source knowledge platform.
+T.A.R. is part of the wider Commonwealth of Black America project ecosystem while remaining a distinct project.
 
 - **Commonwealth public repository:** https://github.com/THECOMMONWEALTHOFBLACKAMERICA/Commonwealth-of-Black-America
 - **Commonwealth project index:** https://github.com/THECOMMONWEALTHOFBLACKAMERICA/Commonwealth-of-Black-America/blob/main/PROJECTS.md
-- **Commonwealth website status:** a Wix site is published, but the clean institutional vanity address is still being migrated.
-- **Target public CBA Wix address:** `https://cbaofficial.wixsite.com/commonwealth-of-black-america` — do not represent this as live until Wix confirms the migration.
-
-## T.A.R. Website Status
-
-No standalone public T.A.R. website has been verified or published yet. Until one exists, this GitHub repository is the canonical public project location.
+- **Current CBA Wix site:** https://dorianmartinsmith.wixsite.com/commonwealth-of-bl-1
 
 ## Related Public Projects
 
@@ -26,4 +30,4 @@ No standalone public T.A.R. website has been verified or published yet. Until on
 
 ## Accuracy Rule
 
-A public website, deployment, API service, or institutional capability should be described as live only after it is independently verifiable. Repository code, architecture, and release-candidate status should not be confused with a production deployment.
+A public website, deployment, API service, museum capability, partnership, nonprofit status, or institutional credential should be described as live or established only after it is independently verifiable. Repository code, architecture, release-candidate status, and future institutional goals should not be confused with a production deployment or formally recognized museum institution.
