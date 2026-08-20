@@ -17,8 +17,10 @@ T.A.R. is part of the wider Commonwealth of Black America project ecosystem whil
 
 No standalone public T.A.R. website has been verified or published yet. Until one exists, this GitHub repository is the canonical public project location.
 
-## Related Public Research
+## Related Public Projects
 
+- **THE ARCHIVE official website:** https://dorianmartinsmith.wixsite.com/the-archive-1
+- **THE ARCHIVE / research ecosystem index:** https://github.com/THECOMMONWEALTHOFBLACKAMERICA/Commonwealth-of-Black-America/blob/main/PROJECTS.md
 - **CRFTE / CRTFE:** https://github.com/THECOMMONWEALTHOFBLACKAMERICA/CRFTE
 - **CBA:** https://github.com/THECOMMONWEALTHOFBLACKAMERICA/Commonwealth-of-Black-America
 
