@@ -21,6 +21,7 @@ from .control import (
 from .document_api import router as document_router
 from .governance import proposal as governance_proposal, status as governance_status
 from .ingestion import get_job, ingest_bytes, list_documents
+from .interpretation_api import router as interpretation_router
 from .jobs_api import router as jobs_router
 from .media_api import router as media_router
 from .memory import engine, remember, stats
@@ -43,6 +44,7 @@ app.add_middleware(
 app.include_router(jobs_router)
 app.include_router(document_router)
 app.include_router(media_router)
+app.include_router(interpretation_router)
 
 
 class AskRequest(BaseModel):
