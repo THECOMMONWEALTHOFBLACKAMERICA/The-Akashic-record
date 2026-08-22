@@ -20,6 +20,7 @@ try:
     from backend.app import commission_access as _commission_access  # noqa: F401,E402
     from backend.app import control as _control  # noqa: F401,E402
     from backend.app import ingestion as _ingestion  # noqa: F401,E402
+    from backend.app import interpretation as _interpretation  # noqa: F401,E402
     from backend.app import jobs as _jobs  # noqa: F401,E402
     from backend.app import library as _library  # noqa: F401,E402
     from backend.app import publications as _publications  # noqa: F401,E402
